@@ -420,12 +420,82 @@ occurred.
 
 ---
 
+## D-27 — vendored the original HumanEval, not HumanEval+ · **P**
+
+**Decision:** `cbs.tasks.families.humaneval` vendors `openai/human-eval`'s 164
+problems (MIT-licensed; `data/vendored/humaneval/ATTRIBUTION.md`), not the
+evalplus-extended HumanEval+ the brief actually names (§8).
+
+**Why vendor at all, and why this one first:** validating the pipeline against
+*real* code (real syntax diversity, multi-line bodies, imports, genuine
+reference solutions) is a materially stronger check than the hand-written toy
+family alone — confirmed by running: **all 164 canonical solutions pass the
+real sandbox and verifier**, and a random sample of "return None" wrong-answer
+probes are all correctly rejected. Original HumanEval is the easiest
+permissively-licensed, single-file, no-dependency source to vendor and was the
+fastest path to that validation; evalplus's data requires its own
+package/release artifact and is the natural next upgrade, not a blocker on
+getting *a* real family in now.
+
+**This validation immediately paid for itself — two real extraction bugs found
+and fixed, neither of which the toy family (hand-written, single-line
+assertions by construction) could ever have surfaced:**
+
+1. `public_tests` was first derived with a `MULTILINE`-anchored regex over
+   `assert candidate(...)` lines, mirroring the toy family's approach (D-18).
+   Several HumanEval assertions span multiple source lines (a list literal
+   continuing on the next line); the regex silently truncated those
+   mid-expression, producing a subset that failed to even *parse*. Caught by
+   the test that checks a reference solution passes its own derived public
+   subset. Fixed by extracting complete statements via `ast` (parse, find
+   `Assert` nodes referencing `candidate`, re-emit with `ast.unparse`) instead
+   of matching source text — a statement re-serialized from its own AST cannot
+   be truncated mid-expression.
+2. Two problems (`HumanEval/38`, `HumanEval/50`) build randomised setup state
+   across loop iterations before asserting (`for _ in range(100): s = ...;
+   encoded = encode(s); assert candidate(encoded) == s`). Extracting the
+   `assert` alone is syntactically valid AST but references names never bound
+   in isolation — a `NameError` at runtime, not a legitimate test result. AST
+   correctness alone could not catch this; only running the derived subset
+   against the task's own known-correct reference solution could. So
+   `humaneval_suite()` now validates every derived `public_tests` against its
+   reference solution at load time (default on) and blanks it out if even the
+   reference fails — because a public test that rejects a *correct* candidate
+   is actively harmful (it would make `S_star`'s execution-feedback loop
+   discard correct answers), not merely uninformative like an empty one.
+
+Both are pinned as regression tests in `tests/test_humaneval_family.py` by
+task id and by synthetic minimal reproductions, not only by the aggregate
+"most tasks get a public subset" count. With the fix, 161/164 problems have a
+validated public subset; the remaining 3 (2 loop-scoped, 1 with no flat
+asserts at all) fall back to a compile-only check for execution feedback — an
+honest degradation, not a silent one.
+
+**Why this matters before any real capability claim (not just instrument
+validation):** two caveats, both already known and stated in the vendored
+data's own attribution rather than left implicit —
+
+1. The original test suites are known to under-specify correctness (this is
+   evalplus's entire premise); a scaffold could pass HumanEval's hidden tests
+   on a subtly wrong solution in a way HumanEval+ would catch. Move to
+   HumanEval+ before this family backs any frontier-crossing claim.
+2. HumanEval is one of the most reproduced benchmarks in ML — assume any
+   web-scale frozen model has seen it during pretraining. Brief §8's
+   contamination probes and "prefer newer or perturbed variants" guidance
+   apply before treating a solve on this family as evidence about capability
+   rather than about memorisation.
+
+Both are exactly the caveats brief §7/§8 asks to be handled, stated here so
+they travel with the family rather than being rediscovered later.
+
+---
+
 ## Still open
 
 | # | Decision | Status | Needed by |
 |---|---|---|---|
 | D-12 | Primary `S_evo` fork: `jennyzzt/dgm` vs `metauto-ai/HGM` | **D** | Phase 4 execution |
-| D-13 | Final benchmark selection and per-family task counts | **D** | Phase 1 (real families) |
+| D-13 | Remaining benchmark families: MBPP+, LiveCodeBench, SWE-bench Verified, and upgrading HumanEval→HumanEval+ (D-27) | **D** | before real capability claims |
 | D-14 | Exact `N_max` and the `1/N_max` crossing cutoff, pre-registered | **D** | before Phase 5 |
 | D-15 | Whether to add a third model family | **D** | Phase 3 (done otherwise) |
 | D-16 | Per-phase budget caps in dollars / GPU-hours | **D** | before first paid run |

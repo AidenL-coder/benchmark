@@ -135,9 +135,14 @@ def _load_suite(family: str):
         from cbs.tasks.families.toy import toy_suite
 
         return toy_suite()
+    if family == "humaneval":
+        from cbs.tasks.families.humaneval import humaneval_suite
+
+        return humaneval_suite()
     raise SystemExit(
-        f"unknown task family {family!r}. Only 'toy' is vendored; real benchmark "
-        "families need data fetched separately."
+        f"unknown task family {family!r}. Vendored families: 'toy', 'humaneval'. "
+        "Other real benchmark families (MBPP+, LiveCodeBench, SWE-bench Verified) "
+        "need data fetched separately -- see docs/DECISIONS.md D-13."
     )
 
 

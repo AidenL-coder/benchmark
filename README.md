@@ -18,7 +18,7 @@ Specs: [`docs/self-improving-agents-proposal.md`](docs/self-improving-agents-pro
 | Phase | Scope | State |
 |---|---|---|
 | 0 | Environment, config, model/sandbox/budget layers | **done** |
-| 1 | Task schema, verifier, frozen hashed splits, toy family | **done** (toy family; real benchmarks pending) |
+| 1 | Task schema, verifier, frozen hashed splits, toy + HumanEval families | **done** (MBPP+/LiveCodeBench/SWE-bench Verified/transfer family still open, D-13) |
 | 2 | Frontier estimation + estimator validation | **done — DoD met** |
 | 3 | `S0` / `S_star` baselines, matched-compute harness, elicitation control | **done** |
 | 4 | `S_evo` measurement layer (interception-based tagging, archive, ablation) | measurement layer **done**; execution blocked on D-23 |
@@ -90,6 +90,20 @@ under-spends are not a matched comparison.
 requires an explicit marker written to fd 1, so a candidate cannot forge a pass
 via `sys.exit(0)` or by reassigning `print`.
 
+**Task families** — `toy` (synthetic, known ground truth, validates the
+instrument itself) and `humaneval` (real, vendored, 164 problems — brief §8's
+primary coding family). All 164 canonical solutions pass the actual sandbox and
+verifier, which is a materially stronger validation than the toy family alone:
+real code has genuine syntax diversity, multi-line bodies, and imports no
+hand-written example anticipates. This is the *original* HumanEval, not the
+evalplus-extended HumanEval+ the brief names — a scaffold could pass HumanEval's
+under-specified hidden tests on a subtly wrong solution in a way HumanEval+
+would catch, and HumanEval is near-certainly present in any web-scale frozen
+model's pretraining data. Both are stated in `data/vendored/humaneval/ATTRIBUTION.md`
+and DECISIONS.md D-27: fine for instrument validation, not yet for a real
+capability claim. MBPP+, LiveCodeBench, SWE-bench Verified, and a transfer
+family remain open (D-13/D-17).
+
 **`S_star`** (`cbs.scaffolds.s_star`) — the strong fixed baseline (brief §4):
 best-of-N, execution feedback, tool use (a static compile check), and
 self-consistency (majority vote by canonical form), all support-tagged. The
@@ -160,7 +174,7 @@ itself is measured at high power separately — empirically 0.944 over 90
 task-seeds.
 
 ```bash
-./venv/Scripts/python.exe -m pytest       # ~220 tests
+./venv/Scripts/python.exe -m pytest       # ~240 tests (the HumanEval family test spawns 164 real sandboxes; a couple of minutes)
 ```
 
 `cbs compare --config configs/compare_toy_mock.yaml` runs the same idea for
