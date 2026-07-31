@@ -180,7 +180,7 @@ itself is measured at high power separately — empirically 0.944 over 90
 task-seeds.
 
 ```bash
-./venv/Scripts/python.exe -m pytest       # ~310 tests (HumanEval/MBPP tests spawn 591 real sandboxes between them; a few minutes)
+./venv/Scripts/python.exe -m pytest       # ~310 tests (HumanEval/MBPP tests each verify every reference solution and public subset against the real sandbox, well over a thousand executions between them; a few minutes)
 ```
 
 `cbs compare --config configs/compare_toy_mock.yaml` runs the same idea for
