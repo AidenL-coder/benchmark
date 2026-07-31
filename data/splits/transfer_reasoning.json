@@ -1,0 +1,39 @@
+{
+  "suite_name": "transfer_reasoning",
+  "suite_hash": "236d93ff6895e533e65925abc53d93fbb8578e324eb6321a1dccb1c8fea014c0",
+  "salt": "cbs-v1",
+  "ratios": {
+    "train": 0.0,
+    "held_out": 0.0,
+    "transfer": 1.0
+  },
+  "counts": {
+    "transfer": 10
+  },
+  "created_utc": "2026-07-31T05:16:11.559891+00:00",
+  "cbs_version": "0.1.0",
+  "task_splits": {
+    "transfer/compound_interest": "transfer",
+    "transfer/triangle_validity": "transfer",
+    "transfer/min_coins": "transfer",
+    "transfer/perfect_number": "transfer",
+    "transfer/lcm_of_list": "transfer",
+    "transfer/quadratic_roots": "transfer",
+    "transfer/nim_winner": "transfer",
+    "transfer/distinct_prime_factors": "transfer",
+    "transfer/linear_system_2x2": "transfer",
+    "transfer/josephus_survivor": "transfer"
+  },
+  "task_content_hashes": {
+    "transfer/compound_interest": "ea7714ddf6d1f1c2cb649261bdae664a5ad966a75504abddb13291a0e58fedf3",
+    "transfer/triangle_validity": "6437fd820dd3e6adb60008d3012becc64f8460e23d03d3f974b8b14019cc6557",
+    "transfer/min_coins": "16f3c9f2a512e4f10f777c4f4385602b9832433c2b9fab955ab17f92df61ce23",
+    "transfer/perfect_number": "04f251b0bab15e2738aa9c2dfda97621adac57f813f1051133b34f12d7555e6b",
+    "transfer/lcm_of_list": "5d2902a2a559df623331946c7a4cf9a6865e789df3adc147eded0f802e553072",
+    "transfer/quadratic_roots": "3ac5eaf126eb5f9f8ad94ea8f11e96733584762ba61ec66ab82f16a69bc9284d",
+    "transfer/nim_winner": "5caad571ebe0e6c6bd1410b95d8feb40f76d781bcea5452a029d8f01ad470a22",
+    "transfer/distinct_prime_factors": "1725f7e37635dde71eab74e9362e3e64b59c8a06460740e2fec39a8ed4be1162",
+    "transfer/linear_system_2x2": "4341ca64be6773f42e1b953758d3f1d7fe9412ab1f7a4c20237c2cd502f3557f",
+    "transfer/josephus_survivor": "9e8c40b4f39a8518e1662a7f1bff3b33af2c61d9211ca2df0b9c39d3780a8088"
+  }
+}

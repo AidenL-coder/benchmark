@@ -139,10 +139,19 @@ def _load_suite(family: str):
         from cbs.tasks.families.humaneval import humaneval_suite
 
         return humaneval_suite()
+    if family == "mbpp":
+        from cbs.tasks.families.mbpp import mbpp_suite
+
+        return mbpp_suite()
+    if family == "transfer_reasoning":
+        from cbs.tasks.families.transfer_reasoning import transfer_suite
+
+        return transfer_suite()
     raise SystemExit(
-        f"unknown task family {family!r}. Vendored families: 'toy', 'humaneval'. "
-        "Other real benchmark families (MBPP+, LiveCodeBench, SWE-bench Verified) "
-        "need data fetched separately -- see docs/DECISIONS.md D-13."
+        f"unknown task family {family!r}. Vendored families: 'toy', 'humaneval', "
+        "'mbpp', 'transfer_reasoning'. Other real benchmark families "
+        "(LiveCodeBench, SWE-bench Verified, HumanEval+/MBPP+) need data fetched "
+        "separately -- see docs/DECISIONS.md D-13."
     )
 
 

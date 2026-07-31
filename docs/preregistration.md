@@ -80,17 +80,20 @@ to `N_max`, and ablating support-expanding ops removes the solve.
 
 - Frozen models: ≥2 families × ≥2 sizes. Proposed Qwen2.5-Coder-1.5B / 7B, plus
   one of Llama-3.x-8B or DeepSeek-Coder.
-- Primary (coding): original HumanEval vendored and integrated
-  (`cbs.tasks.families.humaneval`; 164 problems, all canonical solutions
-  verified against the real sandbox — docs/DECISIONS.md D-27). **[TO FIX]**
-  before this backs a real capability claim: upgrade to HumanEval+ (the
-  original's test suites under-specify correctness) and add MBPP+,
-  LiveCodeBench slice, SWE-bench Verified subset.
-- Transfer (reasoning): **[TO FIX]** — one set, checkable answers, never
-  optimised on.
+- Primary (coding): original HumanEval and MBPP (sanitized) vendored and
+  integrated (`cbs.tasks.families.humaneval`/`.mbpp`; 164 + 427 problems, every
+  canonical/reference solution verified against the real sandbox —
+  docs/DECISIONS.md D-27/D-29). **[TO FIX]** before this backs a real
+  capability claim: upgrade to HumanEval+/MBPP+ (the originals' test suites
+  under-specify correctness) and add a LiveCodeBench slice and a SWE-bench
+  Verified subset.
+- Transfer (reasoning): resolved (D-17) — `transfer_reasoning`, 10
+  hand-authored math/logic/combinatorics tasks (`cbs.tasks.families.transfer_reasoning`;
+  D-30), never optimised on, frozen entirely into the `transfer` split.
 - Splits frozen and hashed **before** sampling (`cbs splits freeze`); the suite
-  hash is quoted in results. HumanEval's is already frozen
-  (`data/splits/humaneval.json`, 85 train / 79 held-out).
+  hash is quoted in results. Frozen so far: `data/splits/humaneval.json`
+  (85 train / 79 held-out), `data/splits/mbpp.json` (205 train / 222
+  held-out), `data/splits/transfer_reasoning.json` (10 transfer).
 
 ---
 

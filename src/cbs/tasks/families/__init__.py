@@ -12,6 +12,7 @@ Verified, a transfer/reasoning family) remain open -- D-13/D-17.
 from __future__ import annotations
 
 from cbs.tasks.families.humaneval import DEFAULT_HUMANEVAL_PATH, humaneval_suite
+from cbs.tasks.families.mbpp import DEFAULT_MBPP_PATH, mbpp_suite
 from cbs.tasks.families.toy import (
     TOY_TASKS,
     ToyTaskDef,
@@ -19,13 +20,23 @@ from cbs.tasks.families.toy import (
     toy_defs_by_id,
     toy_suite,
 )
+from cbs.tasks.families.transfer_reasoning import (
+    TRANSFER_TASKS,
+    TransferTaskDef,
+    transfer_suite,
+)
 
 __all__ = [
     "DEFAULT_HUMANEVAL_PATH",
+    "DEFAULT_MBPP_PATH",
     "TOY_TASKS",
+    "TRANSFER_TASKS",
     "ToyTaskDef",
+    "TransferTaskDef",
     "humaneval_suite",
+    "mbpp_suite",
     "toy_behaviours",
     "toy_defs_by_id",
     "toy_suite",
+    "transfer_suite",
 ]

@@ -528,16 +528,88 @@ is intentional given how costly a wrong "genuine expansion" claim would be.
 
 ---
 
+## D-29 — vendored MBPP (sanitized), with the model shown one test case
+per the standard evaluation convention · **P**
+
+**Decision:** `cbs.tasks.families.mbpp` vendors the 427-problem sanitized
+subset of `google-research/mbpp` (Apache 2.0;
+`data/vendored/mbpp/ATTRIBUTION.md`) — plain MBPP, not the evalplus-extended
+MBPP+ the brief names, same posture and same caveats as HumanEval (D-27):
+under-specified original test suites, near-certain pretraining contamination.
+
+**Why the prompt includes an example test.** Unlike HumanEval, MBPP's own
+`prompt` field is bare natural language ("Write a function to find the shared
+elements from the given two lists.") with no function signature — a model
+given only that text has no way to know the expected function name or
+argument shape. Every published MBPP harness addresses this by showing one
+test case alongside the instruction; `cbs` follows that convention
+(`test_list[0]` is included in `Task.prompt`) rather than inventing a
+non-standard variant that would make results incomparable to the literature.
+Because that example is already shown to the model, it is unambiguously public
+— `public_tests` (the same first-half heuristic as D-18) always includes it.
+
+**Validation, mirroring D-27:** all 427 reference solutions pass the real
+sandbox and verifier, all 427 get a valid derived public subset (every
+reference solution passes its own), and a random sample of "return None"
+probes are all correctly rejected. Cleaner than HumanEval's extraction: MBPP's
+`test_list` is always flat, single-line, self-contained assertions — none of
+HumanEval's multi-line-literal or loop-scoped-setup failure modes (D-27)
+applied here, so no comparable extraction bugs were found. `entry_point` (not
+given explicitly by the dataset) is inferred from the first `Call` node found
+walking the first test assertion's AST — descriptive metadata only, since
+nothing in the verifier consumes `Task.entry_point`, so the heuristic does not
+need to be perfect.
+
+---
+
+## D-30 — transfer/reasoning family (D-17) hand-authored, not vendored · **P**
+
+**Decision:** `cbs.tasks.families.transfer_reasoning` is 10 hand-authored
+math/logic/combinatorics tasks (compound interest, triangle validity, coin-
+change DP, perfect numbers, LCM, quadratic roots, Nim optimal play, prime
+factorisation, 2x2 linear systems, the Josephus problem) — verified through
+the exact same mechanism as every other family (write a function, execute
+against tests in the sandbox), so no new verification mode was needed.
+
+**Why hand-authored rather than vendored:** no small, permissively-licensed,
+directly code-checkable reasoning benchmark was as immediately available as
+HumanEval/MBPP were. Brief §8 asks for "one set" with checkable answers, not
+exhaustive coverage, so hand-authoring 10 solid problems was the faster,
+equally valid path to satisfying D-17 now rather than blocking on finding and
+adapting a third external dataset.
+
+**What makes this "transfer" rather than just more of the same:** content, not
+mechanics. Every task is deliberately unlike the general-purpose programming
+idioms HumanEval/MBPP are built from — number theory, game-theoretic optimal
+play, basic algebra — so that generalisation here is genuinely about problem
+*character* transferring, not about a held-out slice of the same distribution.
+Frozen entirely into the `transfer` split (`data/splits/transfer_reasoning.json`,
+train=0/held_out=0/transfer=1.0 — since it is a standalone suite, this routes
+every task to `transfer` without needing `assign_splits`'s
+`transfer_families` override, which exists for mixing multiple families in
+one suite rather than for a family that is transfer-only by construction).
+
+**Validated the same way as the other real families**: all 10 reference
+solutions pass the real sandbox, all 10 get a valid public subset (every
+reference solution passes its own — verified before committing, exactly as
+for HumanEval/MBPP), and "return None" is correctly rejected on every task.
+One hand-computed test value (`min_coins(27, [1, 5, 10, 25])`) was initially
+wrong (asserted 4, the true minimum is 3: 25+1+1) — caught by re-deriving it
+by hand a second time before running the suite, a reminder that hand-authored
+ground truth needs the same scrutiny as vendored data, not less.
+
+---
+
 ## Still open
 
 | # | Decision | Status | Needed by |
 |---|---|---|---|
 | D-12 | Primary `S_evo` fork: `jennyzzt/dgm` vs `metauto-ai/HGM` | **D** | Phase 4 execution |
-| D-13 | Remaining benchmark families: MBPP+, LiveCodeBench, SWE-bench Verified, and upgrading HumanEval→HumanEval+ (D-27) | **D** | before real capability claims |
+| D-13 | LiveCodeBench, SWE-bench Verified, and upgrading HumanEval→HumanEval+/MBPP→MBPP+ (D-27/D-29) | **D** | before real capability claims |
 | D-14 | Exact `N_max`, the `k`/`K` reliability threshold, and the interpretation matrix's three placement thresholds (all parameters of `cbs.crossing`/`cbs.interpretation`, D-28), pre-registered | **D** | before Phase 5 |
 | D-15 | Whether to add a third model family | **D** | Phase 3 (done otherwise) |
 | D-16 | Per-phase budget caps in dollars / GPU-hours | **D** | before first paid run |
-| D-17 | Which reasoning set is the transfer family | **D** | Phase 1 (real families) |
+| D-17 | ~~Which reasoning set is the transfer family~~ — resolved: `transfer_reasoning`, D-30 | **C** | — |
 | D-23 | Provision a Linux host with both GPU and Docker | **D** | Phase 4 execution (blocking) |
 
 D-14 in particular must be fixed in `preregistration.md` **before** the full run,
