@@ -20,7 +20,7 @@ Specs: [`docs/self-improving-agents-proposal.md`](docs/self-improving-agents-pro
 | 0 | Environment, config, model/sandbox/budget layers | **done** |
 | 1 | Task schema, verifier, frozen hashed splits, toy family | **done** (toy family; real benchmarks pending) |
 | 2 | Frontier estimation + estimator validation | **done — DoD met** |
-| 3 | `S0` / `S_star` baselines, matched-compute harness | `S0` + harness done; `S_star` pending |
+| 3 | `S0` / `S_star` baselines, matched-compute harness, elicitation control | **done** |
 | 4 | `S_evo` (forked DGM loop) with support-tagging | not started |
 | 5 | Crossing test and ablations | not started |
 | 6 | Analysis and write-up | not started |
@@ -74,6 +74,23 @@ under-spends are not a matched comparison.
 requires an explicit marker written to fd 1, so a candidate cannot forge a pass
 via `sys.exit(0)` or by reassigning `print`.
 
+**`S_star`** (`cbs.scaffolds.s_star`) — the strong fixed baseline (brief §4):
+best-of-N, execution feedback, tool use (a static compile check), and
+self-consistency (majority vote by canonical form), all support-tagged. The
+hidden test oracle is queried exactly once, to score the final choice —
+identical to `S0` — because execution feedback and selection read only a
+separate, deliberately weaker `public_tests` subset (`Task.public_tests`, see
+DECISIONS.md D-18/D-19). A real deployed agent does not get to try candidates
+against the grading suite and keep the first that passes; letting `S_star` do
+so would make any elicitation gain it shows an artefact of oracle access.
+
+**Elicitation control** (`cbs.compare`) — `S0` vs `S_star` at matched
+per-attempt compute `B`, the control that separates "genuine expansion" from
+"known scaffolding tricks" (brief §9.1). `S0`'s side is read off `pass@B` on an
+*oversampled* frontier record (never resampled at exactly `B`, which degenerates
+— DECISIONS.md D-22); `S_star`'s side is measured empirically over independent
+repetitions, each under a fresh per-rep budget. Run via `cbs compare`.
+
 ---
 
 ## The estimator's central limitation
@@ -110,8 +127,17 @@ itself is measured at high power separately — empirically 0.944 over 90
 task-seeds.
 
 ```bash
-./venv/Scripts/python.exe -m pytest       # ~150 tests
+./venv/Scripts/python.exe -m pytest       # ~185 tests
 ```
+
+`cbs compare --config configs/compare_toy_mock.yaml` runs the same idea for
+`S_star`: on the mock backend it should *not* reliably beat `S0` (the mock is
+content-blind and cannot benefit from reading its own error messages — D-20),
+and on two toy tasks it measurably loses to `S0` because a naive public-test
+subset happens to admit a specific wrong answer that only the hidden oracle
+catches (D-21). Both are documented, expected results, not bugs — the point of
+running this on the mock is to validate the comparison harness itself before
+trusting it on a real model.
 
 ---
 
@@ -169,8 +195,9 @@ src/cbs/
   models/          frozen-model clients: mock (known ground truth), openai_compat
   sandbox/         docker (security boundary) | subprocess (not)
   tasks/           schema, verifier, canonicalisation, frozen hashed splits
-  scaffolds/       support tagging + S0 minimal scaffold
+  scaffolds/       support tagging + S0 minimal scaffold + S_star strong baseline
   frontier/        estimators, sampler, records, validation
+  compare.py       S0 vs S_star at matched compute (elicitation control)
 configs/           base + experiment profiles
 docs/              specs, decision log, pre-registration
 tests/             ~150 tests

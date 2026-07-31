@@ -36,7 +36,22 @@ class Task:
         top, which is itself a scaffold operation and is tagged as such.
     tests:
         Python source asserting correctness of `entry_point`. Executed in the
-        sandbox alongside the candidate. Must exit non-zero on failure.
+        sandbox alongside the candidate. Must exit non-zero on failure. This is
+        the hidden oracle: it decides `p_hat(x)` and every pass/fail verdict, and
+        no scaffold operation may read its outcome and feed it back into
+        generation (see `public_tests`).
+    public_tests:
+        A weaker, deliberately partial subset of `tests` that a scaffold is
+        permitted to execute and condition on. Real coding agents do not see the
+        held-out grading suite while working; execution-feedback loops (brief
+        section 3.1) run the candidate against something the agent itself has
+        access to. If `execution_feedback` read the hidden `tests` and fed the
+        failure back into the prompt, that would leak the grading oracle into
+        the generative process -- which would make an "expanding" operation
+        trivially able to walk straight to a passing answer, and would make any
+        resulting frontier-crossing an artefact of oracle access rather than of
+        the operation. Empty string means no public signal is available for
+        this task; a scaffold falls back to a plain compile/parse check.
     setup:
         Optional preamble prepended before the candidate (imports, fixtures).
     reference_solution:
@@ -49,6 +64,7 @@ class Task:
     prompt: str
     tests: str
     entry_point: str = ""
+    public_tests: str = ""
     setup: str = ""
     reference_solution: str | None = None
     timeout_s: float = 10.0
@@ -68,6 +84,7 @@ class Task:
                 "family": self.family,
                 "prompt": self.prompt,
                 "tests": self.tests,
+                "public_tests": self.public_tests,
                 "entry_point": self.entry_point,
                 "setup": self.setup,
             },

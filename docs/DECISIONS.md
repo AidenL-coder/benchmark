@@ -199,6 +199,120 @@ truth label exists.
 
 ---
 
+## D-18 — Execution feedback reads a separate, weaker `public_tests` · **P**
+
+**Decision:** `Task` gained a `public_tests` field, mechanically derived for the
+toy family as the first half of `tests`' assertion lines (rounded up, min 1).
+`S_star`'s execution-feedback loop runs candidates against `public_tests` only;
+`tests` (the hidden oracle) is queried exactly once, at the very end, to score
+the final choice — identical to `S0`.
+
+**Why:** a real deployed coding agent does not see the held-out grading suite
+while it works. If execution feedback read the same hidden tests used for
+scoring, an "expanding" operation could walk straight to a passing answer by
+querying the answer key repeatedly, and any resulting frontier-crossing would be
+an artefact of oracle access, not of the operation. Keeping the channels
+separate is what makes an `S_star` elicitation gain mean something.
+
+---
+
+## D-19 — `S_star`'s internal selection never queries the hidden oracle · **P**
+
+**Decision:** final candidate selection is majority vote by canonical form
+among public-test-passing candidates (falling back to a vote over all
+candidates if none passed), not `test_guided_selection` against `tests`.
+
+**Why:** `test_guided_selection` is correctly classified support-preserving
+(D-04) and would have been a legitimate design — but it would make `S_star`
+unrealistic. A real strong baseline does not get to try candidates against the
+grading suite and keep the first one that happens to pass. Restricting
+selection to public signal plus consensus means any elicitation gain `S_star`
+shows is earned the way a real scaffold would earn it, not manufactured by
+oracle access unavailable to a real deployment.
+
+---
+
+## D-20 — the mock backend cannot demonstrate a genuine feedback benefit · **P**
+
+**Observation, not a decision to make, but one worth stating plainly.**
+`MockModelClient._generate` reads only `(task_id, temperature, seed/index)` —
+never prompt content (deliberately: this is what keeps its ground truth exactly
+known, see D-07/D-08). So on the mock, every repair call in `S_star`'s loop is
+statistically an independent fresh draw at the same true `p(x)`, indistinguishable
+from just drawing another top-level candidate. Execution feedback cannot help
+the mock, structurally, no matter how good the mechanism is.
+
+Measured consequence: on `configs/compare_toy_mock.yaml`, `S_star`'s solve rate
+is *not* reliably above `S0`'s at matched compute — mean elicitation gain
+≈ −0.11 across the toy suite (see D-21 for why). **This is the expected,
+correct result on this backend**, not a failure of `S_star`. The comparator
+validates the *harness* here — that solve rates, CIs, and matched-compute
+bookkeeping are computed correctly — not whether execution feedback helps,
+which requires a real model that reads its own error messages (Phase 3 real
+run, deferred pending GPU access per D-03).
+
+---
+
+## D-21 — naive public-test derivation has real blind spots · **P**
+
+**Finding**, pinned by `tests/test_s_star.py::TestPublicTestBlindSpot`.
+
+On `toy/is_palindrome`, the mechanical "first half of assertions" split (D-18)
+happens to put all four `True`-expected examples in `public_tests` and all
+three `False`-expected examples in the hidden-only remainder. The declared
+incorrect variant `def is_palindrome(s): return True` therefore **passes the
+public subset** and is only caught by the hidden oracle. Same mechanism on
+`toy/unique_sorted`: the duplicate-collapsing case (`[2,2,2] -> [2]`) is hidden-
+only, so `def unique_sorted(xs): return sorted(xs)` (no dedup) passes public and
+fails hidden.
+
+Consequence: on exactly these two tasks, `S_star`'s "prefer a public-passing
+candidate" rule can commit to a plausible-but-wrong answer that a `S0`-style
+best-of-N-with-full-oracle-selection would never have been fooled by (`S0`
+never sees an intermediate verdict; it is only ever scored once, same as
+`S_star`'s final check, but with no internal step that could be misled).
+
+**This is left as-is, not "fixed" by hand-curating a more representative public
+subset.** A hand-picked subset would hide a genuine, real-world phenomenon —
+partial test coverage misleading an agent's self-selection — behind an
+artificially thorough example set that real benchmarks (a single doctest
+example, a handful of visible unit tests) usually do not provide either. It is
+exactly the kind of failure the study's overfitting/verifier-reliability
+concerns (proposal §8, brief §7) are about, and it is more useful documented
+than papered over.
+
+---
+
+## D-22 — `S0`'s side of a matched-compute comparison must be read from an
+oversampled frontier record, never sampled at exactly the comparison budget · **P**
+
+**Bug found and fixed**, in `cbs.cli.cmd_compare`.
+
+`pass_at_k(n, c, k)` is *exactly* 1.0 whenever `k == n` and `c > 0`: "did any of
+all n samples succeed" is trivially yes if one did. Sampling `S0` at
+`N_max == B` (the comparison budget) and reading `pass@B` off it therefore
+degenerates to an uninformative point mass, discarding the entire reason the
+unbiased pass@k estimator exists — to give a low-variance read of "solve rate at
+budget `k`" from a **larger** sample `n > k` (Chen et al. 2021).
+
+**Fix:** `cmd_compare` samples `S0` at `N_max = budget_calls * s0_oversample_factor`
+(default 8x) and reads `pass@B` off that curve. `tests/test_compare.py` pins
+both the correct (oversampled, non-degenerate CI) and the degenerate (`n == k`)
+cases so this cannot silently regress.
+
+**Side finding, worth keeping in mind when choosing `N_max`/`B` for real runs:**
+for any task with `p(x)` not tiny, `S0`'s `pass@B` saturates near 1.0 for even
+modest `B` (12 independent tries already means ~1 − 0.4¹² ≈ 99.9999% at
+`p = 0.6`). The elicitation-gain metric is therefore only informative either
+near the practical frontier (small `p(x)`, where resampling alone does not save
+you either) or as an efficiency comparison (mean calls actually spent, which
+`ComparisonRecord` reports alongside the rate). Reassuringly, that low-`p`
+regime is exactly where the real study's beyond-frontier tasks live, so this is
+not a limitation of the design — it is a reason to expect the comparison to be
+most informative precisely on the tasks the study cares about most.
+
+---
+
 ## Still open
 
 | # | Decision | Status | Needed by |

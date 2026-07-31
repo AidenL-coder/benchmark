@@ -1,6 +1,6 @@
 {
   "suite_name": "toy",
-  "suite_hash": "7d44bd5eaa08e90408e5a9f7d7ddc35c2382d7f8caa647429a21ee927fe73c94",
+  "suite_hash": "c39c7cf68688fb4f63e9b3ee628e191c2b2af79ca447d755ab83cf8cc4c532fc",
   "salt": "cbs-v1",
   "ratios": {
     "train": 0.5,
@@ -11,7 +11,7 @@
     "held_out": 2,
     "train": 4
   },
-  "created_utc": "2026-07-31T01:00:21.362666+00:00",
+  "created_utc": "2026-07-31T01:39:22.715137+00:00",
   "cbs_version": "0.1.0",
   "task_splits": {
     "toy/sum_list": "held_out",
@@ -22,11 +22,11 @@
     "toy/impossible_parity": "train"
   },
   "task_content_hashes": {
-    "toy/sum_list": "9ceac80959c4d558ac0d00413cefd4c0228bab6f145a0a4caea0e2ba956dbc98",
-    "toy/is_palindrome": "722fac6672d5fa59bf6c39a29dcba8823689cc8cc5ee0a333f9d68bcb8fa0ebe",
-    "toy/count_vowels": "1cfe560a79705a7ea5d495bc00d6a1e76ec9007a91174a2786e5625939380dd2",
-    "toy/gcd": "b5181c413af5276fa8ad3f6571e3881ea7ca41fe0617a6fd73ccd3166c4dc255",
-    "toy/unique_sorted": "7e28ef4478ba771df886241bc7300b84e97ab308cc0421ce6ae60b1978fee2aa",
-    "toy/impossible_parity": "facc5b871cdd3610097fee72bb861a8fb4a745109bc501a42cfd5cfe667a9da1"
+    "toy/sum_list": "8df30dc731b00289851b1404918a33ade3e0240160d04887e9cba906ec3dc09f",
+    "toy/is_palindrome": "31c23b8eb8c1314e716f5f42798d80e49d2999e3afc3f7f51183ac10bc301414",
+    "toy/count_vowels": "4887dd5f9416f2b6497c010c9ee2ca94bb7c8785c1637812396341f6f5c2204d",
+    "toy/gcd": "3869c94828afc0babce14480fba3d708adc3929e835068dd06ee2875b895e6cf",
+    "toy/unique_sorted": "18bac33311092f7ab4ffd5b2bcdb50ee84efbf274079a80e71dec4352a3c1bf1",
+    "toy/impossible_parity": "4f8d345d154a71996c32d255beeaaef44040fe6d8250f2f3ae7b3e23c08e3438"
   }
 }

@@ -51,6 +51,7 @@ class ToyTaskDef:
             family=family,
             prompt=self.prompt,
             tests=self.tests,
+            public_tests=_derive_public_tests(self.tests),
             entry_point=self.entry_point,
             reference_solution=self.correct_variants[0],
             timeout_s=10.0,
@@ -70,6 +71,22 @@ class ToyTaskDef:
                 list(self.species_weights) if self.species_weights else None
             ),
         )
+
+
+def _derive_public_tests(tests: str) -> str:
+    """The first half of `tests`' assertion lines (rounded up, min 1).
+
+    Deliberately weaker than the hidden oracle -- see `Task.public_tests`. Given
+    mechanically from `tests` rather than hand-authored so a scaffold's public
+    signal can never accidentally drift into matching the full hidden suite as
+    the toy family is edited. A candidate that is genuinely correct always
+    passes this subset too, since it is a subset of the same assertions; an
+    incorrect candidate may or may not be caught by it, which is the intended,
+    realistic asymmetry (partial test coverage catches some bugs, not all).
+    """
+    lines = [l for l in tests.splitlines() if l.strip()]
+    n_public = max(1, (len(lines) + 1) // 2)
+    return "\n".join(lines[:n_public]) + "\n"
 
 
 def _prompt(signature: str, description: str) -> str:

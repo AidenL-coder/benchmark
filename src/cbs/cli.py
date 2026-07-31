@@ -8,6 +8,7 @@ One command reproduces one experiment (brief section 11). Commands:
     cbs splits freeze|verify    freeze / check hashed splits
     cbs frontier validate       Phase 2 DoD: estimators vs known ground truth
     cbs frontier estimate       run the frontier estimation from a config
+    cbs compare                 S0 vs S_star at matched compute (elicitation control)
 """
 
 from __future__ import annotations
@@ -357,6 +358,125 @@ def cmd_frontier_estimate(args) -> int:
     return 0
 
 
+def cmd_compare(args) -> int:
+    """`S0` vs `S_star` at matched compute -- the elicitation control (brief §9.1)."""
+    from cbs.budget import BudgetAccountant, BudgetCaps, MatchedComputeHarness
+    from cbs.compare import ScaffoldComparator, load_frontier_records
+    from cbs.config import load_config, parse_cli_overrides
+    from cbs.frontier.sampler import FrontierSampler
+    from cbs.models import build_model
+    from cbs.sandbox import select_backend
+    from cbs.scaffolds.s_star import SStar
+    from cbs.tasks import Verifier
+    from cbs.tasks.schema import Split, TaskSuite
+    from cbs.tasks.splits import SplitRatios, assign_splits
+
+    config = load_config(args.config, parse_cli_overrides(args.set or []))
+    print(f"config={args.config} fingerprint={config.fingerprint()}")
+
+    model = build_model(config.section("model"))
+    sandbox_cfg = config.section("sandbox")
+    sandbox = select_backend(
+        backend=sandbox_cfg.get("backend", "auto"),
+        allow_insecure_fallback=sandbox_cfg.get("allow_insecure_fallback", False),
+    )
+    verifier = Verifier(sandbox)
+
+    tasks_cfg = config.section("tasks")
+    suite = _load_suite(tasks_cfg.get("family", "toy"))
+    ratios = SplitRatios(**tasks_cfg.get("splits", {"train": 0.5, "held_out": 0.5}))
+    suite = assign_splits(suite, ratios, salt=tasks_cfg.get("salt", "cbs-v1"))
+    split_name = args.split or tasks_cfg.get("compare_split")
+    if split_name:
+        suite = suite.filter_split(Split(split_name))
+
+    compare_cfg = config.section("compare")
+    budget_calls = args.budget or int(compare_cfg.get("budget_calls", 10))
+    n_reps = args.n_reps or int(compare_cfg.get("n_reps", 30))
+    output_dir = Path(args.output_dir or config.get("output_dir", "runs/compare"))
+    s_star = SStar(**compare_cfg.get("s_star", {}))
+
+    # S0's solve rate at budget B is read off pass@k on a LARGER sample, not
+    # measured by drawing exactly B samples once: pass@k(n, c, k) is exact-1.0
+    # whenever n == k and c > 0 (drawing the whole population and asking "did
+    # any succeed" is trivially yes if one did), which is degenerate, not
+    # informative. Chen et al.'s unbiased pass@k estimator exists precisely so
+    # a bigger sample gives a low-variance read at any k <= n; oversample here
+    # so that read is real.
+    oversample = int(compare_cfg.get("s0_oversample_factor", 8))
+    s0_n_max = max(budget_calls * oversample, budget_calls)
+
+    print(
+        f"model={model.model_id} sandbox={sandbox.name} tasks={len(suite)} "
+        f"split={split_name or 'all'} B={budget_calls} n_reps={n_reps}"
+    )
+
+    if args.dry_run:
+        upper = len(suite) * n_reps * budget_calls
+        print(
+            f"\nDRY RUN -- S_star: up to {len(suite)} tasks x {n_reps} reps x "
+            f"{budget_calls} calls = up to {upper} model calls (fewer if it stops "
+            f"early on a passing candidate). Plus an S0 frontier record at "
+            f"N_max={s0_n_max} per task ({oversample}x the comparison budget, so "
+            "pass@B is read off a real curve rather than degenerating at n==k), "
+            "reused from cache if present.\n"
+            "Re-run without --dry-run to execute."
+        )
+        return 0
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    s0_path = output_dir / "s0_records.jsonl"
+    s0_records = load_frontier_records(s0_path) if s0_path.exists() else {}
+    missing = [
+        t.task_id
+        for t in suite
+        if t.task_id not in s0_records or s0_records[t.task_id].n_samples < s0_n_max
+    ]
+    if missing:
+        print(f"sampling S0 at N_max={s0_n_max} for {len(missing)} task(s): {missing}")
+        sampler = FrontierSampler(
+            model=model, verifier=verifier, output_dir=output_dir / "s0_frontier"
+        )
+        todo = TaskSuite(name="todo", tasks=[t for t in suite if t.task_id in missing])
+        for record in sampler.estimate_suite(
+            todo, s0_n_max, BudgetAccountant("s0-for-compare"), resume=True
+        ):
+            s0_records[record.task_id] = record
+        with s0_path.open("w", encoding="utf-8") as fh:
+            for record in s0_records.values():
+                fh.write(record.to_json() + "\n")
+
+    harness = MatchedComputeHarness(BudgetCaps(calls=budget_calls))
+    comparator = ScaffoldComparator(
+        model=model,
+        verifier=verifier,
+        s_star=s_star,
+        budget_calls=budget_calls,
+        n_reps=n_reps,
+        harness=harness,
+    )
+    records = comparator.compare_suite(suite, s0_records)
+
+    out_path = output_dir / "comparison.jsonl"
+    with out_path.open("w", encoding="utf-8") as fh:
+        for record in records:
+            fh.write(json.dumps(record.as_dict()) + "\n")
+
+    print("\n" + "=" * 78)
+    print(f"wrote {len(records)} comparison records -> {out_path}")
+    if records:
+        mean_gain = sum(r.elicitation_gain for r in records) / len(records)
+        print(f"mean elicitation-adjusted gain (S_star - S0): {mean_gain:+.4f}")
+    unmatched = [r.task_id for r in records if not r.realised_spend_matched]
+    if unmatched:
+        print(
+            f"realised spend outside tolerance on: {unmatched}\n"
+            "  (S_star under-spending its allowance is expected -- it stops once "
+            "satisfied, like a real agent would -- see cbs.compare module docstring)"
+        )
+    return 0
+
+
 # ---------------------------------------------------------------------------
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="cbs", description=__doc__)
@@ -416,6 +536,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="report the sample count without spending compute (brief section 10)",
     )
     p_fe.set_defaults(func=cmd_frontier_estimate)
+
+    p_cmp = sub.add_parser("compare", help="S0 vs S_star at matched compute")
+    p_cmp.add_argument("--config", required=True)
+    p_cmp.add_argument("--set", action="append", metavar="KEY=VALUE")
+    p_cmp.add_argument("--budget", type=int, default=0, help="per-run call budget B")
+    p_cmp.add_argument("--n-reps", type=int, default=0)
+    p_cmp.add_argument("--split", default="")
+    p_cmp.add_argument("--output-dir", default="")
+    p_cmp.add_argument("--dry-run", action="store_true")
+    p_cmp.set_defaults(func=cmd_compare)
 
     return parser
 

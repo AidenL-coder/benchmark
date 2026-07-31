@@ -1,0 +1,34 @@
+# S0 vs S_star at matched compute -- the elicitation control (brief section
+# 9.1). Costs nothing and needs no GPU: the mock backend has known ground
+# truth, so this validates the COMPARISON HARNESS, not whether S_star helps a
+# real model (it structurally can't demonstrate that -- see D-20).
+#
+#   cbs compare --config configs/compare_toy_mock.yaml --dry-run
+#   cbs compare --config configs/compare_toy_mock.yaml
+
+extends: base.yaml
+
+output_dir: runs/compare_toy_mock
+
+model:
+  backend: mock
+  model_id: mock-qwen-stub
+  seed: 0
+  behaviours_from_family: toy
+
+tasks:
+  family: toy
+
+compare:
+  # Per-run call budget B, identical for S0 and S_star.
+  budget_calls: 12
+  # Repetitions per task to estimate each scaffold's solve rate at budget B.
+  n_reps: 40
+  s_star:
+    max_candidates: 4
+    max_repairs_per_candidate: 2
+    stop_on_first_public_pass: true
+
+budget:
+  caps:
+    usd: 0.0
