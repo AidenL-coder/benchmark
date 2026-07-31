@@ -490,13 +490,51 @@ they travel with the family rather than being rediscovered later.
 
 ---
 
+## D-28 — crossing determination, interpretation placement, and the
+statistical plan built as pure logic ahead of having data to run them on · **P**
+
+**Decision:** built `cbs.crossing` (the four-part frontier-crossing
+determination, brief §3.3), `cbs.interpretation` (mechanical placement into
+the §7/§9.3 interpretation matrix), and `cbs.stats` (bootstrap CIs and
+Benjamini-Hochberg multiple-comparison correction, both required by §6/§9.4
+and not built before now) — all as logic over objects Phases 2-4 already
+produce (`FrontierRecord`, `ScaffoldRunSummary`, `AblationResult`), not as
+scripts that assume a real `S_evo` run exists.
+
+**Why now, given D-23 blocks actually running the crossing test for real:**
+none of this needs a GPU, Docker, or a forked loop — it needs the *shape* of
+the data those things will eventually produce, which is already fixed by
+Phases 2-4's schemas. Building and testing the combination logic now means
+Phase 5 is "point this at real records" rather than "design and debug this
+from scratch under time pressure once GPU access finally arrives."
+
+**Two things this deliberately does NOT do**, because they are pre-registration
+decisions (D-14), not implementation details:
+
+- `evaluate_crossing`'s `k`/`K` reliability threshold is a required parameter,
+  never a default — there is no principled value to guess at without
+  pre-registering one.
+- `place_in_interpretation_matrix`'s three judgment-call thresholds
+  (near-zero crossing rate, "high" transfer retention, "large" overfitting
+  gap) are all explicit parameters with documented meanings, not hard-coded
+  guesses. Calling the function forces a conscious choice; it cannot be used
+  by accident with unexamined defaults.
+
+**One design choice worth flagging:** "`S_evo` beats `S_star`" is decided by
+non-overlapping confidence intervals (`s_evo_ci_low > s_star_ci_high`), not a
+raw point-estimate comparison — a point-estimate-only comparison would call
+noise a result. This is stricter than a simple difference-of-means test and
+is intentional given how costly a wrong "genuine expansion" claim would be.
+
+---
+
 ## Still open
 
 | # | Decision | Status | Needed by |
 |---|---|---|---|
 | D-12 | Primary `S_evo` fork: `jennyzzt/dgm` vs `metauto-ai/HGM` | **D** | Phase 4 execution |
 | D-13 | Remaining benchmark families: MBPP+, LiveCodeBench, SWE-bench Verified, and upgrading HumanEval→HumanEval+ (D-27) | **D** | before real capability claims |
-| D-14 | Exact `N_max` and the `1/N_max` crossing cutoff, pre-registered | **D** | before Phase 5 |
+| D-14 | Exact `N_max`, the `k`/`K` reliability threshold, and the interpretation matrix's three placement thresholds (all parameters of `cbs.crossing`/`cbs.interpretation`, D-28), pre-registered | **D** | before Phase 5 |
 | D-15 | Whether to add a third model family | **D** | Phase 3 (done otherwise) |
 | D-16 | Per-phase budget caps in dollars / GPU-hours | **D** | before first paid run |
 | D-17 | Which reasoning set is the transfer family | **D** | Phase 1 (real families) |

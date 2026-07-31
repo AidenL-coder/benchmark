@@ -50,14 +50,24 @@ the schedule is part of the shard's resume key.
 
 ## 3. Thresholds **[TO FIX before Phase 5]**
 
-| Parameter | Symbol | Value | Notes |
+The combination logic for every row below is implemented and tested
+(`cbs.crossing.evaluate_crossing`, `cbs.interpretation.place_in_interpretation_matrix`,
+`cbs.stats.benjamini_hochberg` — see `docs/DECISIONS.md` D-28). What remains is
+choosing the **values**, not writing the code that consumes them — each is a
+required parameter with no default, specifically so it cannot be used
+un-chosen.
+
+| Parameter | Symbol / arg | Value | Notes |
 |---|---|---|---|
 | Frontier budget | `N_max` | **[TO FIX]** | proposed 1000; see docs/DECISIONS.md D-03 |
-| Crossing cutoff | `p_hat(x) < 1/N_max` | **[TO FIX]** | follows from `N_max` |
-| Reliability of a crossing | `k`/`K` runs | **[TO FIX]** | proposed k=3, K=5 |
-| Compute-match tolerance | — | 0.05 | implemented default |
+| Crossing cutoff | `p_hat(x) < 1/N_max` | **[TO FIX]** | follows from `N_max`; `evaluate_crossing` derives it from `FrontierRecord.beyond_frontier` when `S0` is sampled at exactly `N_max` |
+| Reliability of a crossing | `evaluate_crossing(k, K, ...)` | **[TO FIX]** | proposed k=3, K=5 |
+| Compute-match tolerance | `MatchedComputeHarness(tolerance=...)` | 0.05 | implemented default |
 | Confidence level | — | 0.95 | Clopper-Pearson, two-sided |
-| Multiple-comparison correction | — | **[TO FIX]** | Benjamini-Hochberg proposed, across tasks within a family |
+| Multiple-comparison correction | `cbs.stats.benjamini_hochberg(alpha=...)` | **[TO FIX]** | implemented; proposed alpha=0.05, across tasks within a family |
+| Near-zero crossing rate | `place_in_interpretation_matrix(crossing_rate_epsilon=...)` | **[TO FIX]** | proposed 0.0 (exact), applied to BH-*corrected* crossing claims, not raw ones |
+| "High" transfer retention | `place_in_interpretation_matrix(transfer_retention_high=...)` | **[TO FIX]** | proposed 0.5 |
+| "Large" overfitting gap | `place_in_interpretation_matrix(overfitting_gap_high=...)` | **[TO FIX]** | proposed 0.3 |
 | Number of evolution seeds | — | **[TO FIX]** | proposed ≥3; loop is stochastic |
 
 A task counts as **crossed** only if all four conditions of brief §3.3 hold
@@ -70,12 +80,17 @@ to `N_max`, and ablating support-expanding ops removes the solve.
 
 - Frozen models: ≥2 families × ≥2 sizes. Proposed Qwen2.5-Coder-1.5B / 7B, plus
   one of Llama-3.x-8B or DeepSeek-Coder.
-- Primary (coding): **[TO FIX]** — candidates HumanEval+/MBPP+, LiveCodeBench
-  slice, SWE-bench Verified subset.
+- Primary (coding): original HumanEval vendored and integrated
+  (`cbs.tasks.families.humaneval`; 164 problems, all canonical solutions
+  verified against the real sandbox — docs/DECISIONS.md D-27). **[TO FIX]**
+  before this backs a real capability claim: upgrade to HumanEval+ (the
+  original's test suites under-specify correctness) and add MBPP+,
+  LiveCodeBench slice, SWE-bench Verified subset.
 - Transfer (reasoning): **[TO FIX]** — one set, checkable answers, never
   optimised on.
 - Splits frozen and hashed **before** sampling (`cbs splits freeze`); the suite
-  hash is quoted in results.
+  hash is quoted in results. HumanEval's is already frozen
+  (`data/splits/humaneval.json`, 85 train / 79 held-out).
 
 ---
 
@@ -98,13 +113,19 @@ compute, for `S_evo` versus `S_star`.
 
 - Clopper-Pearson CIs on every per-task rate; rule of three plus the exact
   one-sided bound for zero-success tasks.
-- Bootstrap CIs on aggregate metrics; report across evolution seeds as a
-  distribution, never a single run.
-- Multiple-comparison correction across tasks **[method TO FIX]**.
+- Bootstrap CIs on aggregate metrics (`cbs.stats.bootstrap_ci`, percentile
+  method); report across evolution seeds as a distribution, never a single run.
+- Multiple-comparison correction across tasks: Benjamini-Hochberg
+  (`cbs.stats.benjamini_hochberg`), implemented and unit-tested against a
+  hand-computed reference case; **[alpha TO FIX]**, proposed 0.05.
 - Any comparison not at matched compute is flagged as such in the output, not
-  silently reported.
+  silently reported (`ComparisonRecord.realised_spend_matched`).
 - Truncated runs (budget-exhausted) are excluded from capability claims rather
   than scored as failures; `FrontierRecord.n_budget_exhausted` records them.
+- Per-task crossing verdicts computed by `cbs.crossing.evaluate_crossing`;
+  aggregate placement into the interpretation matrix below by
+  `cbs.interpretation.place_in_interpretation_matrix`, both mechanical once
+  §3's thresholds are fixed.
 
 ---
 

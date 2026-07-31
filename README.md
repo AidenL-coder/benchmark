@@ -22,8 +22,8 @@ Specs: [`docs/self-improving-agents-proposal.md`](docs/self-improving-agents-pro
 | 2 | Frontier estimation + estimator validation | **done — DoD met** |
 | 3 | `S0` / `S_star` baselines, matched-compute harness, elicitation control | **done** |
 | 4 | `S_evo` measurement layer (interception-based tagging, archive, ablation) | measurement layer **done**; execution blocked on D-23 |
-| 5 | Crossing test and ablations | not started |
-| 6 | Analysis and write-up | not started |
+| 5 | Crossing test and ablations | determination logic **done** (`cbs.crossing`); running it for real blocked on D-23 |
+| 6 | Analysis and write-up | statistical plan pieces (bootstrap CIs, BH correction) and interpretation-matrix placement **done** (`cbs.stats`, `cbs.interpretation`); write-up itself needs real results |
 
 ---
 
@@ -174,7 +174,7 @@ itself is measured at high power separately — empirically 0.944 over 90
 task-seeds.
 
 ```bash
-./venv/Scripts/python.exe -m pytest       # ~240 tests (the HumanEval family test spawns 164 real sandboxes; a couple of minutes)
+./venv/Scripts/python.exe -m pytest       # ~280 tests (the HumanEval family test spawns 164 real sandboxes; a couple of minutes)
 ```
 
 `cbs compare --config configs/compare_toy_mock.yaml` runs the same idea for
@@ -247,7 +247,10 @@ src/cbs/
   compare.py       S0 vs S_star at matched compute (elicitation control)
   archive.py       overfitting gap / transfer retention / hard-coding triage
   ablation.py      scaffold-agnostic ablation runner
+  crossing.py      four-part frontier-crossing determination (brief 3.3)
+  interpretation.py  mechanical placement into the interpretation matrix
+  stats.py         bootstrap CIs, Benjamini-Hochberg multiple-comparison correction
 configs/           base + experiment profiles
 docs/              specs, decision log, pre-registration
-tests/             ~150 tests
+tests/             ~280 tests
 ```
