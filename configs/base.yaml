@@ -1,0 +1,43 @@
+# Base profile. Experiment configs `extends:` this and override what differs,
+# so the diff between two runs is legible (brief section 11).
+
+seed: 0
+output_dir: runs/default
+
+sandbox:
+  # auto = Docker when available, else the subprocess backend.
+  backend: auto
+  # Must be set true on hosts where Docker cannot exist (Colab). Doing so is a
+  # declaration that the subprocess backend is NOT a security boundary; see
+  # docs/DECISIONS.md D-02.
+  allow_insecure_fallback: false
+
+tasks:
+  family: toy
+  salt: cbs-v1
+  splits:
+    train: 0.5
+    held_out: 0.5
+    transfer: 0.0
+
+frontier:
+  n_max: 100
+  confidence: 0.95
+  # Temperature schedule as [temperature, fraction] pairs; fractions sum to 1.
+  # Weighted toward moderate/high temperature for solution diversity, with a
+  # low-temperature stage so the modal solution is reliably observed.
+  schedule:
+    - [0.2, 0.10]
+    - [0.6, 0.25]
+    - [0.8, 0.35]
+    - [1.0, 0.20]
+    - [1.2, 0.10]
+  # Raw completions are large at N_max ~ 10^4. Distinct correct solutions are
+  # always stored in full; this only controls keeping every raw completion.
+  store_raw_completions: false
+
+budget:
+  caps:
+    calls: null
+    total_tokens: null
+    usd: 0.0   # zero-cost by default: a hosted backend must raise this deliberately

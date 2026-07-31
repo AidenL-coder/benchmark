@@ -1,0 +1,28 @@
+# Instrument self-check: frontier estimation over the toy family using the
+# deterministic mock model, whose true p(x) and species richness are known.
+# Costs nothing and needs no GPU. This is the config to run after any change to
+# the sampler, verifier, canonicaliser or estimators.
+#
+#   cbs frontier estimate --config configs/frontier_toy_mock.yaml
+
+extends: base.yaml
+
+output_dir: runs/frontier_toy_mock
+
+model:
+  backend: mock
+  model_id: mock-qwen-stub
+  seed: 0
+  # Ground truth (true p(x) and the correct/incorrect variant pools) is read
+  # from the task family itself, so it cannot drift out of sync with the tasks.
+  behaviours_from_family: toy
+
+tasks:
+  family: toy
+
+frontier:
+  n_max: 200
+
+budget:
+  caps:
+    usd: 0.0

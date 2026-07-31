@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cbs"
+version = "0.1.0"
+description = "Capability-boundary study of self-improving coding agents: frontier estimation and support-class instrumentation."
+requires-python = ">=3.10"
+
+# Deliberately minimal. The statistics in cbs.frontier.estimators are implemented
+# from scratch (no scipy) so the measurement core and its tests run anywhere,
+# including machines without a scientific Python stack. See docs/DECISIONS.md D-07.
+dependencies = [
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+# Only needed to talk to a real model backend (vLLM / Ollama / hosted).
+serving = ["httpx>=0.27"]
+# Analysis / plotting for Phase 6.
+analysis = ["numpy>=1.26", "pandas>=2.0", "matplotlib>=3.8"]
+dev = ["pytest>=8.0", "pytest-timeout>=2.3"]
+
+[project.scripts]
+cbs = "cbs.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "slow: longer-running validation tests (deselect with -m 'not slow')",
+]

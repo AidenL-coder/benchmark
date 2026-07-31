@@ -1,0 +1,50 @@
+# Real frontier estimation against a local vLLM server (Colab / rented GPU).
+#
+# Start the server first (see notebooks/colab_bootstrap.ipynb):
+#   python -m vllm.entrypoints.openai.api_server \
+#     --model Qwen/Qwen2.5-Coder-1.5B-Instruct --dtype float16 --port 8000
+#
+# Then, from the repo root:
+#   cbs frontier estimate --config configs/frontier_vllm_colab.yaml --dry-run
+#   cbs frontier estimate --config configs/frontier_vllm_colab.yaml
+#
+# Sizing: N_max=1000 over ~100 tasks is ~100k generations per model, roughly
+# 3 GPU-hours on a T4 for a 1.5B model. Rule of three then bounds a zero-success
+# task at p < 0.003, which is within the brief's stated 10^3-10^4 range.
+
+extends: base.yaml
+
+output_dir: /content/drive/MyDrive/cbs/runs/frontier_qwen15b
+
+model:
+  backend: openai_compat
+  base_url: http://localhost:8000
+  model: Qwen/Qwen2.5-Coder-1.5B-Instruct
+  endpoint: chat
+  local: true          # no per-token cost; keeps the usd cap at zero
+  timeout_s: 180
+  max_retries: 3
+
+sandbox:
+  # Colab runtimes are containers already and cannot nest Docker, so the
+  # subprocess backend is the only option here. Setting this true is an explicit
+  # acknowledgement that verification runs without a security boundary.
+  backend: subprocess
+  allow_insecure_fallback: true
+
+tasks:
+  family: toy          # swap for a real family once its data is fetched
+  splits:
+    train: 0.4
+    held_out: 0.4
+    transfer: 0.2
+
+frontier:
+  n_max: 1000
+
+budget:
+  caps:
+    # Hard ceiling: tasks x N_max, plus headroom. The accountant stops the run
+    # rather than overrunning a rented GPU (brief section 10).
+    calls: 120000
+    usd: 0.0

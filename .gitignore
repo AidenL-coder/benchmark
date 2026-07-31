@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+venv/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Experiment outputs (raw logs are large; regenerate via configs)
+runs/
+outputs/
+wandb/
+*.log
+
+# Benchmark data (fetched, not vendored -- see `cbs data status`)
+data/raw/
+data/cache/
+
+# Local overrides
+configs/local/
+.env
