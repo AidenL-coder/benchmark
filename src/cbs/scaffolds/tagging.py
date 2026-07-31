@@ -242,6 +242,31 @@ class OperationTrace:
 
     records: list[OpRecord] = field(default_factory=list)
 
+    def record_instant(self, name: str, duration_s: float = 0.0, **metadata) -> None:
+        """Append an already-completed operation, tagged now rather than at a
+        call site.
+
+        `record()` assumes the calling code can be trusted to name its own
+        operation as it happens -- true for `S0`/`S_star`, which we author. It
+        is not true for an evolved, untrusted agent (`cbs.scaffolds.evolved`):
+        whether a given verifier call was *selection* (support-preserving) or
+        *conditioning the next sample on its error* (support-expanding) can
+        only be decided by watching what the agent did with the result
+        afterward, which is necessarily after the fact. Interception buffers
+        raw events and calls this once classification is complete, in the
+        order the events actually occurred.
+        """
+        support_class = support_class_of(name)
+        self.records.append(
+            OpRecord(
+                name=name,
+                support_class=support_class,
+                seq=len(self.records),
+                duration_s=duration_s,
+                metadata=dict(metadata),
+            )
+        )
+
     @contextmanager
     def record(self, name: str, **metadata):
         """Time and tag one operation.

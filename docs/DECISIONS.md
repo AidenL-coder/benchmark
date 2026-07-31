@@ -313,16 +313,126 @@ most informative precisely on the tasks the study cares about most.
 
 ---
 
+## D-23 — nowhere in current infrastructure can safely run a real `S_evo` · **D**
+
+**Finding, surfaced rather than worked around.** Brief §10 makes Docker
+mandatory for executing model-generated code, and D-02 already established
+that reasoning applies double to `S_evo`: its blast radius is self-modifying
+*orchestration* code with live network access to a model endpoint, run
+repeatedly across generations, not a one-shot candidate solution. Neither
+environment this project currently has access to satisfies that:
+
+- the Windows dev machine has no Docker installed;
+- Colab's runtime is already a container and **cannot nest Docker** — this
+  isn't a missing package, it's a platform constraint.
+
+So there is currently no host in this project's plan that can safely run a
+forked DGM-style loop. This blocks *executing* Phase 4 for real, not building
+its measurement layer (§5.2 — which is what this session built: D-24 through
+D-26 below, all validated without trusting any self-modifying code).
+
+**What resolves it:** a rented Linux instance with both a GPU and Docker
+(a RunPod/Lambda/vast.ai box, e.g.) — which also happens to satisfy D-03's GPU
+requirement for real vLLM serving in the same environment. This converges two
+open needs into one provisioning step, worth doing together rather than
+separately. Needs a decision (and likely a budget cap, D-16) before Phase 4 can
+actually run.
+
+---
+
+## D-24 — `S_evo` tagging is enforced by interception, not self-report · **P**
+
+**Decision:** `S0`/`S_star` tag their own operations at the call site
+(`OperationTrace.record`), which is fine because we author their control flow
+and can trust it. `S_evo`'s agent code cannot be trusted the same way: it is
+produced by an optimisation process whose objective is "solve more benchmark
+tasks", not "report its own operations honestly", and an agent that discovered
+it could omit tagging an expanding operation to look more like bounded search
+would have no incentive not to.
+
+`cbs.scaffolds.evolved.InterceptionSession` instead sits between the untrusted
+agent function and the only two channels it can act through — the frozen model
+(`InterceptingModelClient`) and the verifier (`InterceptingVerifier`) — and
+classifies every call from what was actually observed, after the fact
+(`OperationTrace.record_instant`, a new primitive added alongside the existing
+call-site `record()`).
+
+**The one ambiguity interception cannot resolve by construction:** a verifier
+call's pass/fail result might be used only to *select* among already-generated
+candidates (`test_guided_selection`, preserving) or to *condition the next
+generation* on the failure (`execution_feedback`, expanding) — both look
+identical as "a sandboxed run happened". Resolved with behavioural evidence: if
+a later prompt to the model contains a substantial fragment (≥24 chars) of an
+earlier verification's error text, that verifier call classifies as feedback;
+otherwise as selection. A blind default in either direction would be worse —
+always-expanding makes the study's central claim unfalsifiable (everything
+"depends on expansion" trivially, since nearly every agent runs *some*
+verification), and always-preserving would systematically hide real expansion.
+Validated in `tests/test_evolved.py` against two synthetic agents built
+specifically to probe each side: one that verifies candidates but never
+references a failure's error text in a later prompt (correctly classified
+`test_guided_selection`), and one that explicitly builds its repair prompt out
+of the prior error (correctly classified `execution_feedback`).
+
+---
+
+## D-25 — ablation of an untrusted scaffold blocks the information channel,
+not the agent's own code · **P**
+
+**Decision:** `InterceptionSession(disabled_ops=...)` withholds error detail
+from what is *returned to the agent* when `"execution_feedback"` is disabled —
+the real result (with its real error text) is still what gets recorded for the
+session's own bookkeeping, but the agent genuinely never receives the text, so
+it cannot embed it in a later prompt no matter what its own code tries to do.
+
+**Why:** for `S0`/`S_star` (our own code), "ablate an operation" can just mean
+"construct it with a different argument" (e.g. `SStar(max_repairs_per_candidate=0)`).
+That option does not exist for an evolved scaffold whose source we do not
+control and should not trust to honor a config flag. Blocking the channel
+itself is the only ablation that is causally valid regardless of what the
+agent's code does with what it's given. Verified in
+`tests/test_evolved.py::TestAblationInterception` and exercised end-to-end by
+`cbs.ablation.run_ablation`.
+
+---
+
+## D-26 — `S_star`'s own execution-feedback tag is call-site, not causal · **P**
+
+**Known simplification, left as-is.** `S_star` (code we author) tags its
+public-test check as `execution_feedback` at the call site every time it runs,
+even in a configuration (`max_repairs_per_candidate=0`) where the loop always
+terminates after that first check and no repair — and therefore no actual
+conditioning — ever follows. Functionally, that lone check is then equivalent
+to `test_guided_selection`, not `execution_feedback`, and is inconsistent with
+the more careful, evidence-based classification `InterceptionSession` applies
+to `S_evo` (D-24).
+
+**Why left as-is:** the discrepancy only affects `S_star`'s own hand-authored
+tagging, which we already fully trust and inspect directly (unlike `S_evo`'s),
+and the static tag still correctly describes the *operation's intent* (deciding
+whether to repair) even in a configuration that happens never to exercise it.
+Fixing it would mean either duplicating `InterceptionSession`'s post-hoc
+classification inside `S_star` or accepting the mismatch; duplicating it for
+code whose honesty is not in question is not worth the complexity. Noted here
+so a reader of an `S_star` ablation result is not confused by
+`execution_feedback` appearing in a trace where no repair could possibly have
+occurred.
+
+---
+
 ## Still open
 
 | # | Decision | Status | Needed by |
 |---|---|---|---|
-| D-12 | Primary `S_evo` fork: `jennyzzt/dgm` vs `metauto-ai/HGM` | **D** | Phase 4 |
+| D-12 | Primary `S_evo` fork: `jennyzzt/dgm` vs `metauto-ai/HGM` | **D** | Phase 4 execution |
 | D-13 | Final benchmark selection and per-family task counts | **D** | Phase 1 (real families) |
 | D-14 | Exact `N_max` and the `1/N_max` crossing cutoff, pre-registered | **D** | before Phase 5 |
-| D-15 | Whether to add a third model family | **D** | Phase 3 |
+| D-15 | Whether to add a third model family | **D** | Phase 3 (done otherwise) |
 | D-16 | Per-phase budget caps in dollars / GPU-hours | **D** | before first paid run |
 | D-17 | Which reasoning set is the transfer family | **D** | Phase 1 (real families) |
+| D-23 | Provision a Linux host with both GPU and Docker | **D** | Phase 4 execution (blocking) |
 
 D-14 in particular must be fixed in `preregistration.md` **before** the full run,
-not after seeing results.
+not after seeing results. D-23 is the practical blocker on actually *running*
+Phase 4/5 — its measurement layer is built and tested (D-24 through D-26), but
+has nothing safe to run against without it.

@@ -21,9 +21,25 @@ Specs: [`docs/self-improving-agents-proposal.md`](docs/self-improving-agents-pro
 | 1 | Task schema, verifier, frozen hashed splits, toy family | **done** (toy family; real benchmarks pending) |
 | 2 | Frontier estimation + estimator validation | **done — DoD met** |
 | 3 | `S0` / `S_star` baselines, matched-compute harness, elicitation control | **done** |
-| 4 | `S_evo` (forked DGM loop) with support-tagging | not started |
+| 4 | `S_evo` measurement layer (interception-based tagging, archive, ablation) | measurement layer **done**; execution blocked on D-23 |
 | 5 | Crossing test and ablations | not started |
 | 6 | Analysis and write-up | not started |
+
+---
+
+## Phase 4 is blocked on infrastructure, not code
+
+`S_evo`'s measurement layer (interception-based support tagging, archive
+persistence, ablation) is built and tested — see DECISIONS.md D-24 through
+D-26. What is *not* possible yet is running a real forked self-improvement
+loop: that means executing self-modifying orchestration code with live network
+access to a model endpoint, which brief §10 requires Docker for. Neither this
+machine (no Docker) nor Colab (containers can't nest Docker) can provide that
+boundary. **D-23**: this needs a rented Linux host with both a GPU and Docker —
+which conveniently also satisfies the GPU need for real vLLM serving in the
+same box — plus a decision on which fork to use (D-12, still open). Flagging
+this now rather than working around it, since routing `S_evo` through an
+unsandboxed host would violate the project's own safety guardrail.
 
 ---
 
@@ -91,6 +107,23 @@ per-attempt compute `B`, the control that separates "genuine expansion" from
 — DECISIONS.md D-22); `S_star`'s side is measured empirically over independent
 repetitions, each under a fresh per-rep budget. Run via `cbs compare`.
 
+**`S_evo` measurement layer** (`cbs.scaffolds.evolved`, `cbs.archive`,
+`cbs.ablation`) — the adapter any forked self-improvement loop's agent code
+plugs into. Support-class tagging cannot be self-reported by evolved,
+untrusted code the way `S0`/`S_star` self-tag (an optimisation process has no
+incentive to honestly flag an operation that makes it look less like bounded
+search), so `InterceptionSession` classifies every operation from the outside
+by watching what the agent actually did — including resolving the one real
+ambiguity (did a verifier result get used for *selection* or fed back to
+*condition the next generation*?) from behavioural evidence: does a later
+prompt contain a fragment of an earlier failure's error text? Ablation follows
+the same logic: `disabled_ops` blocks the information channel itself, so an
+"ablated" scaffold is denied a capability regardless of what its own code
+tries to do, not just reconfigured and hoped to comply. `cbs.archive` computes
+the overfitting gap and transfer retention (brief §9.1) and a crude
+hard-coding triage heuristic. None of this requires running real
+self-modifying code — see the Phase 4 note below for why that part is blocked.
+
 ---
 
 ## The estimator's central limitation
@@ -127,7 +160,7 @@ itself is measured at high power separately — empirically 0.944 over 90
 task-seeds.
 
 ```bash
-./venv/Scripts/python.exe -m pytest       # ~185 tests
+./venv/Scripts/python.exe -m pytest       # ~220 tests
 ```
 
 `cbs compare --config configs/compare_toy_mock.yaml` runs the same idea for
@@ -195,9 +228,11 @@ src/cbs/
   models/          frozen-model clients: mock (known ground truth), openai_compat
   sandbox/         docker (security boundary) | subprocess (not)
   tasks/           schema, verifier, canonicalisation, frozen hashed splits
-  scaffolds/       support tagging + S0 minimal scaffold + S_star strong baseline
+  scaffolds/       support tagging, S0, S_star, and the S_evo interception adapter
   frontier/        estimators, sampler, records, validation
   compare.py       S0 vs S_star at matched compute (elicitation control)
+  archive.py       overfitting gap / transfer retention / hard-coding triage
+  ablation.py      scaffold-agnostic ablation runner
 configs/           base + experiment profiles
 docs/              specs, decision log, pre-registration
 tests/             ~150 tests

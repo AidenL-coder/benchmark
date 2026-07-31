@@ -56,7 +56,12 @@ from cbs.scaffolds.s0 import S0
 from cbs.tasks.schema import Task, TaskSuite
 from cbs.tasks.verifier import Verifier
 
-__all__ = ["ScaffoldRunSummary", "ComparisonRecord", "ScaffoldComparator"]
+__all__ = [
+    "ScaffoldRunSummary",
+    "ComparisonRecord",
+    "ScaffoldComparator",
+    "measure_scaffold_solve_rate",
+]
 
 
 @dataclass
@@ -93,6 +98,65 @@ class ScaffoldRunSummary:
             "op_counts": self.op_counts,
             "expanding_dependency": self.expanding_dependency,
         }
+
+
+def measure_scaffold_solve_rate(
+    scaffold: Scaffold,
+    task: Task,
+    model: ModelClient,
+    verifier: Verifier,
+    budget_calls: int,
+    n_reps: int,
+    harness: MatchedComputeHarness,
+    confidence: float = 0.95,
+    system_label: str | None = None,
+) -> ScaffoldRunSummary:
+    """Empirical solve rate of any `Scaffold` over `n_reps` independent
+    repetitions, each under a fresh per-rep budget of `budget_calls`.
+
+    Shared by `ScaffoldComparator` (`S_star` vs `S0`) and `cbs.ablation`
+    (a scaffold vs an ablated variant of itself): both are exactly this
+    measurement applied to a different pair of scaffold instances.
+    """
+    label = system_label or scaffold.name
+    solved = 0
+    total_calls = 0
+    total_tokens = 0
+    n_exhausted = 0
+    op_counts: dict[str, int] = {}
+    expanding_in_solved = 0
+
+    for rep in range(n_reps):
+        pseudo_task_id = f"{task.task_id}::rep{rep}"
+        accountant = harness.allowance_for(label, pseudo_task_id)
+        result = scaffold.solve(task, model, accountant, verifier=verifier, seed=rep)
+        total_calls += accountant.spent.calls
+        total_tokens += accountant.spent.total_tokens
+        if result.budget_exhausted:
+            n_exhausted += 1
+        if result.passed:
+            solved += 1
+            if result.trace.used_expanding:
+                expanding_in_solved += 1
+        for name, count in result.trace.op_counts().items():
+            op_counts[name] = op_counts.get(name, 0) + count
+
+    ci = clopper_pearson(solved, n_reps, confidence)
+    return ScaffoldRunSummary(
+        scaffold_name=label,
+        task_id=task.task_id,
+        budget_calls=budget_calls,
+        n_reps=n_reps,
+        n_solved=solved,
+        p_hat=ci.point,
+        ci_low=ci.low,
+        ci_high=ci.high,
+        mean_calls=total_calls / n_reps if n_reps else 0.0,
+        mean_total_tokens=total_tokens / n_reps if n_reps else 0.0,
+        n_budget_exhausted=n_exhausted,
+        op_counts=op_counts,
+        expanding_dependency=(expanding_in_solved / solved if solved else 0.0),
+    )
 
 
 @dataclass
@@ -194,45 +258,15 @@ class ScaffoldComparator:
 
     def s_star_summary(self, task: Task) -> ScaffoldRunSummary:
         """Run `S_star` for `n_reps` independent repetitions at budget `B` each."""
-        solved = 0
-        total_calls = 0
-        total_tokens = 0
-        n_exhausted = 0
-        op_counts: dict[str, int] = {}
-        expanding_in_solved = 0
-
-        for rep in range(self.n_reps):
-            pseudo_task_id = f"{task.task_id}::rep{rep}"
-            accountant = self.harness.allowance_for("S_star", pseudo_task_id)
-            result = self.s_star.solve(
-                task, self.model, accountant, verifier=self.verifier, seed=rep
-            )
-            total_calls += accountant.spent.calls
-            total_tokens += accountant.spent.total_tokens
-            if result.budget_exhausted:
-                n_exhausted += 1
-            if result.passed:
-                solved += 1
-                if result.trace.used_expanding:
-                    expanding_in_solved += 1
-            for name, count in result.trace.op_counts().items():
-                op_counts[name] = op_counts.get(name, 0) + count
-
-        ci = clopper_pearson(solved, self.n_reps, self.confidence)
-        return ScaffoldRunSummary(
-            scaffold_name=self.s_star.name,
-            task_id=task.task_id,
+        return measure_scaffold_solve_rate(
+            scaffold=self.s_star,
+            task=task,
+            model=self.model,
+            verifier=self.verifier,
             budget_calls=self.budget_calls,
             n_reps=self.n_reps,
-            n_solved=solved,
-            p_hat=ci.point,
-            ci_low=ci.low,
-            ci_high=ci.high,
-            mean_calls=total_calls / self.n_reps if self.n_reps else 0.0,
-            mean_total_tokens=total_tokens / self.n_reps if self.n_reps else 0.0,
-            n_budget_exhausted=n_exhausted,
-            op_counts=op_counts,
-            expanding_dependency=(expanding_in_solved / solved if solved else 0.0),
+            harness=self.harness,
+            confidence=self.confidence,
         )
 
     def compare_task(self, task: Task, s0_record: FrontierRecord) -> ComparisonRecord:

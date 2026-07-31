@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from cbs.scaffolds.base import Scaffold, ScaffoldResult
+from cbs.scaffolds.evolved import ArchiveEntry, EvolvedScaffold, InterceptionSession
 from cbs.scaffolds.s0 import DEFAULT_SYSTEM_PROMPT, S0
 from cbs.scaffolds.s_star import SStar
 from cbs.scaffolds.tagging import (
@@ -19,7 +20,10 @@ from cbs.scaffolds.tagging import (
 )
 
 __all__ = [
+    "ArchiveEntry",
     "DEFAULT_SYSTEM_PROMPT",
+    "EvolvedScaffold",
+    "InterceptionSession",
     "OpDefinition",
     "OpRecord",
     "OperationTrace",
