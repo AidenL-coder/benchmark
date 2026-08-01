@@ -79,26 +79,49 @@ figured out from scratch; it may already be decided or explicitly deferred.**
   CUDA, ROCm-incompatible). **The fix converges both needs**: a rented Linux
   instance with GPU + Docker (RunPod/Lambda/vast.ai-class) satisfies D-23 and
   the GPU requirement in one box.
-- **D-12 — which fork.** `jennyzzt/dgm` (matches the published DGM method) vs
-  `metauto-ai/HGM` (ICLR 2026 oral, built on DGM). Not yet researched in
-  depth — a fast, valuable thing to do once infra is being provisioned anyway.
+- **D-12 — which fork.** **Now researched** (source inspection + GitHub API
+  metadata for both, full write-up in `docs/DECISIONS.md`'s D-12 section).
+  **Recommendation: `metauto-ai/HGM`** over the brief's stated default
+  (`jennyzzt/dgm`) — HGM is literally built on DGM's codebase (same
+  `coding_agent.py`/`llm.py`/`llm_withtools.py`/task representation, confirmed
+  by diffing file listings), so the fork choice costs nothing extra to
+  integrate either way; HGM is materially more actively maintained (DGM's repo
+  has had no commits in a year vs. HGM's within the last several months) and
+  studies a more sophisticated, more current selection mechanism (clade/
+  subtree promise estimation, ICLR 2026 oral) — a better test case for the
+  study's actual question. **Not yet confirmed by the user** — a recommendation
+  in the log, not a decision made unilaterally, since forking is a bigger
+  commitment than most calls in this project.
+- **D-31 (newly surfaced by that research) — how `cbs` tasks meet the fork's
+  agent.** Both forks operate on real git repos via SWE-bench/Polyglot (edit +
+  bash tools, producing a diff), not on `cbs.tasks.schema.Task`-shaped
+  (prompt + assert-based tests) atomic function completions. Two paths, not
+  yet chosen, detailed in D-12/D-31: adapt each `cbs` task into a minimal
+  one-file git repo and bridge the diff through `EvolvedScaffold`, or let the
+  fork evolve natively against SWE-bench Verified/Polyglot and keep
+  `humaneval`/`mbpp`/`transfer_reasoning` for `S0`/`S_star` only. The second
+  path means **SWE-bench Verified stops being an optional "nice to have"
+  family (D-13) and becomes the substrate the fork choice actually commits
+  to** — a substantially heavier lift than `humaneval`/`mbpp` were, coupled
+  directly to D-23 (its harness runs a full Docker container per instance).
 
-Everything reachable *without* those two has been built: the full measurement
+Everything reachable *without* those has been built: the full measurement
 layer, validated end-to-end against a deterministic mock model and against
 real vendored benchmark code, with the analysis logic (crossing determination,
 interpretation-matrix placement, bootstrap CIs, multiple-comparison
 correction) ready and waiting for real data to point at.
 
-**If the user provisions a host or picks a fork, that's the natural next
-phase of work** — wiring `configs/frontier_vllm_colab.yaml`-style config at
-the real endpoint, forking the chosen loop, and bridging its agent function
-through `cbs.scaffolds.evolved.EvolvedScaffold`.
+**If the user confirms the fork and provisions a host, that's the natural
+next phase of work** — patching `llm.py`'s `create_client` for a local vLLM
+endpoint (~20-30 lines; the DeepSeek/OpenRouter branches already show the
+pattern), resolving D-31, and bridging the agent function through
+`cbs.scaffolds.evolved.EvolvedScaffold`.
 
-**If not**, the next reachable work without infra is: LiveCodeBench / SWE-bench
-Verified (SWE-bench specifically needs Docker per-instance, so it's coupled to
-D-23 anyway), the HumanEval+/MBPP+ upgrades (D-27/D-29), or fixing the
-`preregistration.md` `[TO FIX]` values (D-14) — that last one is pure judgment
-calls, doable with the user right now, no infra needed at all.
+**If not**, the next reachable work without infra is: LiveCodeBench (SWE-bench
+Verified is now coupled to D-12/D-31, not independent), the HumanEval+/MBPP+
+upgrades (D-27/D-29), or fixing the `preregistration.md` `[TO FIX]` values
+(D-14) — that last one is pure judgment calls, doable with the user right
+now, no infra needed at all.
 
 ---
 

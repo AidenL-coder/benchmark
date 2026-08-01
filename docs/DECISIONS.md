@@ -600,12 +600,123 @@ ground truth needs the same scrutiny as vendored data, not less.
 
 ---
 
+## D-12 — recommend `metauto-ai/HGM` over `jennyzzt/dgm`, pending confirmation · **P (research finding, not yet user-confirmed)**
+
+**Researched** (GitHub API metadata + direct source inspection, both repos'
+`README.md`, `coding_agent.py`, `llm.py`, `llm_withtools.py`, top-level file
+listings, `tools/`, `swe_bench/`). Not yet acted on — forking a repo is a
+bigger commitment than most decisions in this log, so this is presented as a
+recommendation for the human to confirm, not a default silently adopted.
+
+### What both repos actually are, structurally
+
+`metauto-ai/HGM`'s own README states it plainly: "built upon the code from the
+Darwin-Gödel Machine." Confirmed by comparing top-level file listings —
+`coding_agent.py`, `coding_agent_polyglot.py`, `llm.py`, `llm_withtools.py`,
+`self_improve_step.py`, `swe_bench/`, `polyglot/`, `tools/`, `prompts/`,
+`utils/` are present, essentially unchanged, in **both**. HGM replaces DGM's
+`DGM_outer.py` (flat archive, score-proportional/best/random parent selection)
+with `hgm.py` + `hgm_utils.py` + `tree.py` — a clade/subtree-based archive that
+estimates the promise of entire self-modification subtrees before expanding
+them, which is the paper's actual contribution (ICLR 2026 oral). Everything
+else — how the agent calls the frozen model, what tools it has, what a "task"
+looks like — is the **same code** in both.
+
+That last point matters most for this project: **the fork choice barely
+affects integration cost, because the two forks share the exact same
+integration surface.** It mainly affects *which specific evolutionary/
+selection mechanism is under study* (DGM's simpler heuristics vs. HGM's
+clade-based promise estimation) — a more interesting and more current test
+case, not a harder integration.
+
+### Two structural facts that apply to *either* fork, and change this
+project's scope
+
+1. **The agent is hardcoded to Claude/OpenAI's hosted APIs, not a generic
+   OpenAI-compatible endpoint.** `llm.py`'s `create_client(model)` dispatches
+   on model-name string prefixes (`claude-`, `gpt-`, `o1-`/`o3-`,
+   `deepseek-`, one `openrouter` case) with no existing branch for an
+   arbitrary local `base_url`. The DeepSeek/OpenRouter branches already show
+   the exact pattern needed (`openai.OpenAI(api_key=..., base_url=...)`), so
+   adding a `local/<model>` branch that points at a local vLLM server is a
+   small, well-scoped patch (roughly 20-30 lines across `llm.py` and
+   `coding_agent.py`'s hardcoded `self.code_model = CLAUDE_MODEL`) — not a
+   rewrite, and consistent with "fork and add the measurement layer on top,"
+   not "rebuild the loop." One real wrinkle:
+   `llm_withtools.get_response_withtools`'s tool-calling dispatch has explicit
+   branches for Claude and o3-style responses, plus a generic fallback that
+   parses a literal `<tool_use>` tag out of a plain-text response for "any
+   other LLM" — usable, but means tool-call reliability for a small open
+   model depends on that model reliably emitting the expected tag format,
+   which is worth validating early rather than assuming.
+2. **The agent operates on real git repositories via SWE-bench/Polyglot, not
+   on atomic function-completion tasks.** `AgenticSystem` takes a
+   `git_tempdir` + `problem_statement` + `base_commit`, and solves by editing
+   files and producing a diff (via `bash`/`edit` tools — that is the entire
+   tool surface, `tools/bash.py` and `tools/edit.py`). This does not map
+   directly onto `cbs.tasks.schema.Task` (prompt + assert-based tests), which
+   is what `toy`/`humaneval`/`mbpp`/`transfer_reasoning` all are. Two ways to
+   reconcile this, not yet chosen:
+   - **(a)** Adapt: wrap each `cbs` task as a minimal one-file git repo (a
+     single stub file + its hidden test file as the "problem"), bridge
+     `AgenticSystem`'s diff output through `EvolvedScaffold`'s
+     `AgentFunction` interface, and verify the result with `cbs`'s own
+     verifier regardless of what the loop's internal SWE-bench-style check
+     says (keeping `cbs` the authoritative scorer, consistent with how `S0`
+     and `S_star` are scored). Plausible, but nontrivial glue code.
+   - **(b)** Don't adapt: let the fork evolve against its own native
+     SWE-bench Verified / Polyglot substrate unmodified, and treat *that* as
+     `cbs`'s primary coding family for any run that includes `S_evo`, with
+     `humaneval`/`mbpp`/`transfer_reasoning` remaining useful for cheap
+     `S0`/`S_star` frontier estimation and calibration but not something
+     `S_evo` is measured against. This is simpler and more faithful to each
+     paper's published methodology, but means **SWE-bench Verified (D-13) is
+     not an optional "nice to have" family — it is the substrate this
+     project's fork choice actually commits to**, and it is a substantially
+     heavier lift than `humaneval`/`mbpp` were: SWE-bench's own harness runs
+     a full per-instance Docker container per problem, coupling this
+     directly to D-23, not just to "a Docker sandbox for candidate code."
+
+Not resolving (a) vs (b) here — that is itself a design decision worth its own
+discussion once a host exists, not something to guess at now.
+
+### Comparison
+
+| | `jennyzzt/dgm` | `metauto-ai/HGM` |
+|---|---|---|
+| License | Apache-2.0 | Apache-2.0 |
+| Stars | 2204 | 405 |
+| Last push (as of 2026-08-01) | 2025-08-13 — ~1 year stale | 2026-02-07 — actively maintained |
+| Open issues | 26 | 5 |
+| Venue | arXiv 2505.22954 | ICLR 2026 oral (arXiv 2510.21614) |
+| Core agent/model/task code | original | same code, inherited from DGM |
+| Selection mechanism | flat archive; score-proportional / best / random parent choice | clade/subtree promise estimation (the paper's actual contribution) |
+
+### Recommendation
+
+**`metauto-ai/HGM`**, over the brief's stated default (`jennyzzt/dgm`), for
+three reasons: it is materially more recently maintained (DGM's own repo has
+had no commits in a year); it studies a more sophisticated and more current
+selection mechanism, which is a more interesting test case for whether
+self-improvement crosses the frontier; and — critically — it costs **nothing
+extra** to integrate relative to DGM, since the integration-relevant code
+(model calling, task representation, tool surface) is identical between them.
+Keep `jennyzzt/dgm` available as the literature-baseline reference the brief
+asks for (§5.1: "a possible second `S_evo` variant"), not discarded.
+
+**This is a recommendation, not a decision** — confirm before forking
+anything (D-12 in the table below stays open until then), and (a) vs (b)
+above needs a decision alongside it once a host is being provisioned.
+
+---
+
 ## Still open
 
 | # | Decision | Status | Needed by |
 |---|---|---|---|
-| D-12 | Primary `S_evo` fork: `jennyzzt/dgm` vs `metauto-ai/HGM` | **D** | Phase 4 execution |
-| D-13 | LiveCodeBench, SWE-bench Verified, and upgrading HumanEval→HumanEval+/MBPP→MBPP+ (D-27/D-29) | **D** | before real capability claims |
+| D-12 | Primary `S_evo` fork — **researched, `metauto-ai/HGM` recommended over the brief's stated default**, awaiting confirmation (see write-up above) | **D** | Phase 4 execution |
+| D-13 | LiveCodeBench, SWE-bench Verified, and upgrading HumanEval→HumanEval+/MBPP→MBPP+ (D-27/D-29) — **note:** whichever fork is chosen likely makes SWE-bench Verified load-bearing, not optional (D-12) | **D** | before real capability claims |
+| D-31 | Adapt `cbs`'s simple function-completion tasks to DGM/HGM's git-repo-based agent (D-12's option (a)), vs. letting `S_evo` evolve natively against SWE-bench Verified/Polyglot and reserving `humaneval`/`mbpp`/`transfer_reasoning` for `S0`/`S_star` only (option (b)) | **D** | Phase 4 execution, alongside D-12 |
 | D-14 | Exact `N_max`, the `k`/`K` reliability threshold, and the interpretation matrix's three placement thresholds (all parameters of `cbs.crossing`/`cbs.interpretation`, D-28), pre-registered | **D** | before Phase 5 |
 | D-15 | Whether to add a third model family | **D** | Phase 3 (done otherwise) |
 | D-16 | Per-phase budget caps in dollars / GPU-hours | **D** | before first paid run |
