@@ -710,6 +710,42 @@ above needs a decision alongside it once a host is being provisioned.
 
 ---
 
+## D-32 — elaborated preregistration thresholds with full reasoning,
+recommendation still awaiting sign-off · **P (recommendations, not yet
+user-confirmed)**
+
+`docs/preregistration.md` §3's `[TO FIX]` thresholds previously carried a bare
+"proposed X" with no justification. Replaced with full reasoning per
+threshold — see that file's "Reasoning behind each recommendation"
+subsection for the complete argument. Two changed from their original
+one-line proposal after actually thinking through the trade-off, not just
+formatting the same numbers more verbosely:
+
+- **Reliability `k/K`**: 3/5 → **6/10** (same 60% proportion, more
+  resolution). The crossing/reliability check runs only on the small,
+  already-filtered beyond-frontier subset, not the full held-out set `N_max`
+  sampling covers — so `K` is comparatively cheap to raise here, and doing so
+  tightens the CI on the highest-stakes claim in the study (a confirmed
+  crossing) for near-zero extra cost.
+- **"Large" overfitting gap**: 0.3 → **0.2**. A 30-point train/held-out gap is
+  a permissive bar that would let a meaningfully overfit result still land in
+  "genuine expansion" rather than "illusory expansion." Deliberately biased
+  this specific threshold conservative (easier to trigger "illusory
+  expansion" on a smaller gap): a real discovery should survive a stricter
+  overfitting check, and a false one is exactly what a stricter check exists
+  to catch. Asymmetric treatment relative to the transfer-retention threshold
+  (left at 0.5, not tightened) is deliberate — retention is the *constructive*
+  claim the study is built to be able to make truthfully and shouldn't be
+  made arbitrarily hard to reach, whereas the overfitting gap is a
+  *disqualifying* check where the conservative direction is the safe one.
+
+**Not acted on beyond updating the recommendation** — `[TO FIX]` markers stay
+in place in `preregistration.md` until the user actually signs off. These are
+judgment calls about acceptable risk in a scientific claim, which is squarely
+the researcher's call to make, not something to finalize on their behalf.
+
+---
+
 ## Still open
 
 | # | Decision | Status | Needed by |
@@ -717,7 +753,7 @@ above needs a decision alongside it once a host is being provisioned.
 | D-12 | Primary `S_evo` fork — **researched, `metauto-ai/HGM` recommended over the brief's stated default**, awaiting confirmation (see write-up above) | **D** | Phase 4 execution |
 | D-13 | LiveCodeBench, SWE-bench Verified, and upgrading HumanEval→HumanEval+/MBPP→MBPP+ (D-27/D-29) — **note:** whichever fork is chosen likely makes SWE-bench Verified load-bearing, not optional (D-12) | **D** | before real capability claims |
 | D-31 | Adapt `cbs`'s simple function-completion tasks to DGM/HGM's git-repo-based agent (D-12's option (a)), vs. letting `S_evo` evolve natively against SWE-bench Verified/Polyglot and reserving `humaneval`/`mbpp`/`transfer_reasoning` for `S0`/`S_star` only (option (b)) | **D** | Phase 4 execution, alongside D-12 |
-| D-14 | Exact `N_max`, the `k`/`K` reliability threshold, and the interpretation matrix's three placement thresholds (all parameters of `cbs.crossing`/`cbs.interpretation`, D-28), pre-registered | **D** | before Phase 5 |
+| D-14 | Exact `N_max`, the `k`/`K` reliability threshold, and the interpretation matrix's three placement thresholds — **fully-reasoned recommendations now in `preregistration.md` §3 (D-32), awaiting sign-off**, not bare placeholders | **D** | before Phase 5 |
 | D-15 | Whether to add a third model family | **D** | Phase 3 (done otherwise) |
 | D-16 | Per-phase budget caps in dollars / GPU-hours | **D** | before first paid run |
 | D-17 | ~~Which reasoning set is the transfer family~~ — resolved: `transfer_reasoning`, D-30 | **C** | — |

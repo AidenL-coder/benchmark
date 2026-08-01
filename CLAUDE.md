@@ -2,9 +2,10 @@
 
 Read this first. It's the fast on-ramp — what this project is, what exists,
 what's actually been verified vs. assumed, what's blocked, and where to look
-for more depth. Everything here was true as of commit `e703aeb` (6 commits on
-`main`, 312 tests passing). If code and this file disagree, trust the code and
-`git log` — update this file when that happens.
+for more depth. Everything here was true as of commit `b40bdfa` (8 commits on
+`main`, 312 tests passing — the last two commits are docs/research only, no
+code changed). If code and this file disagree, trust the code and `git log`
+— update this file when that happens.
 
 ---
 
@@ -119,9 +120,11 @@ pattern), resolving D-31, and bridging the agent function through
 
 **If not**, the next reachable work without infra is: LiveCodeBench (SWE-bench
 Verified is now coupled to D-12/D-31, not independent), the HumanEval+/MBPP+
-upgrades (D-27/D-29), or fixing the `preregistration.md` `[TO FIX]` values
-(D-14) — that last one is pure judgment calls, doable with the user right
-now, no infra needed at all.
+upgrades (D-27/D-29), or getting sign-off on the `preregistration.md`
+`[TO FIX]` thresholds (D-14/D-32 — each now has full reasoning attached, not
+bare placeholders, so this is "review and confirm or push back," not "figure
+out from scratch") — that last one needs zero infra and can happen with the
+user right now.
 
 ---
 

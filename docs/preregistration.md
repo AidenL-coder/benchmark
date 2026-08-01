@@ -55,24 +55,86 @@ The combination logic for every row below is implemented and tested
 `cbs.stats.benjamini_hochberg` — see `docs/DECISIONS.md` D-28). What remains is
 choosing the **values**, not writing the code that consumes them — each is a
 required parameter with no default, specifically so it cannot be used
-un-chosen.
+un-chosen. The recommendations below (`docs/DECISIONS.md` D-32) go beyond bare
+placeholders to full reasoning, but **still need explicit sign-off** before
+`[TO FIX]` can be removed — these are genuine judgment calls about acceptable
+risk, not things to lock in unilaterally.
 
-| Parameter | Symbol / arg | Value | Notes |
+| Parameter | Symbol / arg | Recommended value | Status |
 |---|---|---|---|
-| Frontier budget | `N_max` | **[TO FIX]** | proposed 1000; see docs/DECISIONS.md D-03 |
-| Crossing cutoff | `p_hat(x) < 1/N_max` | **[TO FIX]** | follows from `N_max`; `evaluate_crossing` derives it from `FrontierRecord.beyond_frontier` when `S0` is sampled at exactly `N_max` |
-| Reliability of a crossing | `evaluate_crossing(k, K, ...)` | **[TO FIX]** | proposed k=3, K=5 |
-| Compute-match tolerance | `MatchedComputeHarness(tolerance=...)` | 0.05 | implemented default |
-| Confidence level | — | 0.95 | Clopper-Pearson, two-sided |
-| Multiple-comparison correction | `cbs.stats.benjamini_hochberg(alpha=...)` | **[TO FIX]** | implemented; proposed alpha=0.05, across tasks within a family |
-| Near-zero crossing rate | `place_in_interpretation_matrix(crossing_rate_epsilon=...)` | **[TO FIX]** | proposed 0.0 (exact), applied to BH-*corrected* crossing claims, not raw ones |
-| "High" transfer retention | `place_in_interpretation_matrix(transfer_retention_high=...)` | **[TO FIX]** | proposed 0.5 |
-| "Large" overfitting gap | `place_in_interpretation_matrix(overfitting_gap_high=...)` | **[TO FIX]** | proposed 0.3 |
-| Number of evolution seeds | — | **[TO FIX]** | proposed ≥3; loop is stochastic |
+| Frontier budget | `N_max` | 1000 | **[TO FIX]** |
+| Crossing cutoff | `p_hat(x) < 1/N_max` | 0.001 (follows from `N_max`) | **[TO FIX]** |
+| Reliability of a crossing | `evaluate_crossing(k, K, ...)` | k=6, K=10 | **[TO FIX]** |
+| Compute-match tolerance | `MatchedComputeHarness(tolerance=...)` | 0.05 | implemented default, not disputed |
+| Confidence level | — | 0.95, Clopper-Pearson two-sided | implemented default, not disputed |
+| Multiple-comparison correction | `cbs.stats.benjamini_hochberg(alpha=...)` | 0.05, across tasks within a family | **[TO FIX]** |
+| Near-zero crossing rate | `place_in_interpretation_matrix(crossing_rate_epsilon=...)` | 0.0 (exact) | **[TO FIX]** |
+| "High" transfer retention | `place_in_interpretation_matrix(transfer_retention_high=...)` | 0.5 | **[TO FIX]** |
+| "Large" overfitting gap | `place_in_interpretation_matrix(overfitting_gap_high=...)` | 0.2 | **[TO FIX]** |
+| Number of evolution seeds | — | ≥3 | **[TO FIX]** |
 
 A task counts as **crossed** only if all four conditions of brief §3.3 hold
 simultaneously: reliable solve at `k/K`, `p_hat(x)` below cutoff, compute matched
 to `N_max`, and ablating support-expanding ops removes the solve.
+
+### Reasoning behind each recommendation
+
+**`N_max = 1000`.** Rule-of-three bounds a zero-success task at `p < 0.003` —
+comfortably inside the brief's stated 10³–10⁴ range and a defensible
+"beyond the practical frontier at this compute" claim. At ~100 tasks per
+model this is ≈100k generations, ≈3 GPU-hours on a T4 for a 1.5B model
+(D-03) — affordable for a first real run. Trade-off: a larger `N_max` (e.g.
+5000) tightens the bound to `p < 0.0006` at 5× the cost; the recommendation
+is to start here and scale up selectively only for the specific
+model/task/split combination where a crossing claim's strength actually turns
+on the tighter bound, not uniformly.
+
+**`k=6, K=10` reliability (60%, unchanged proportion from the original k=3/K=5
+proposal, more resolution).** The crossing/reliability check only runs on the
+small subset of tasks already identified as beyond-frontier — a filtered,
+much smaller population than the full held-out set `N_max` sampling covers.
+That asymmetry means `K` here is comparatively cheap to raise: doubling it
+from 5 to 10 barely moves total compute, but gives a materially tighter
+confidence interval around the reliability estimate for the highest-stakes
+claim in the whole study (a confirmed frontier-crossing). Recommend spending
+that cheap margin rather than leaving it on the table.
+
+**BH `alpha=0.05`.** Standard FDR-control convention; no basis for deviating
+without a specific reason tied to how many held-out tasks end up flagged as
+crossing candidates (a genuinely unknown quantity before real data exists).
+
+**Near-zero crossing epsilon = exactly `0.0`.** The BH step already absorbs
+"how many false-positive crossings are tolerable" upstream of this. Adding a
+second, fuzzy tolerance here (`epsilon > 0`) would double-count that same
+uncertainty rather than add information. Any single BH-*corrected*,
+significant crossing should be enough to leave the "bounded search" cell —
+that is the point of correcting first.
+
+**Transfer retention "high" = `0.5`.** A defensible, round bar: at least half
+of whatever gain `S_evo` shows on held-out tasks survives on a family it never
+optimised on. Common enough a bar in transfer-learning framings generally
+that it needs no exotic justification; tightening it (e.g. 0.7) would make
+"genuine expansion" harder to claim, loosening it (0.3) easier — the
+recommendation is the middle value precisely because this cell is the
+*constructive* claim the whole design is built to be capable of making
+truthfully, and it shouldn't be made either too easy or too hard to reach by
+an arbitrary choice here.
+
+**Overfitting gap "large" = `0.2`, tightened from the original 0.3 proposal.**
+A 30-point train-held_out gap (e.g. 90% vs. 60%) is a fairly permissive bar —
+it would let a meaningfully overfit result still land in "genuine expansion"
+rather than "illusory expansion." Given that cell is the highest-stakes,
+hardest-to-walk-back claim the study can make, biasing this specific threshold
+conservative (more readily triggering "illusory expansion" on a smaller gap)
+is the safer asymmetry: a real discovery survives a stricter overfitting
+check; a false one is exactly what a stricter check should catch.
+
+**Evolution seeds `≥3`.** Each seed is a full, independent evolutionary run —
+a materially larger cost driver than frontier sampling or the crossing test,
+since it means running the self-improvement loop itself, not just sampling a
+frozen model. Three is a sensible floor to see seed-to-seed variance at all
+without prohibitive cost; scale up opportunistically if budget allows, same
+posture as `N_max`.
 
 ---
 
