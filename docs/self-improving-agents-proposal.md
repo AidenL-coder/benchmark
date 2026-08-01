@@ -188,7 +188,66 @@ Timeline is indicative; the task-set size and `N_max` are the main tunable knobs
 - **Open-endedness / quality-diversity:** MAP-Elites, novelty search (the machinery DGM-style archives use) — relevant to *why* evolution might or might not find support-expanding moves.
 - **Memorization / contamination / benchmark validity:** grounds the overfitting analysis.
 
-**The gap this fills:** no current work isolates whether frozen-model self-improving agents cross a rigorously estimated capability frontier, nor decomposes any gain into expansion vs. elicitation vs. overfitting, nor ties crossings to an inspectable support-preserving/expanding partition. That instrument — reusable across future self-improving systems — is a contribution independent of which hypothesis wins.
+**Current literature check (2025-2026 wave, added after a targeted novelty
+pass — see `docs/DECISIONS.md` D-36 for the full write-up and its caveats;
+this was a search-plus-abstract/full-text pass on ~8 papers, not a systematic
+citation-graph review, and should be redone properly before submission):**
+
+- **Robeyns, Szummer & Aitchison, "A Self-Improving Coding Agent" (SICA,
+  arXiv 2504.15228, NeurIPS 2025 preprint)** — the closest structural match:
+  a frozen model wrapped by a self-editing scaffold, 17%→53% on a SWE-bench
+  Verified subset. Read in full: it reports the performance delta as evidence
+  of self-improvement without independently estimating the frozen model's own
+  ceiling (no repeated-sampling/best-of-N/pass@k baseline), without testing
+  an elicitation-vs-expansion distinction, and without preregistration or
+  contamination discussion. This is the paper our contribution most needs to
+  differentiate itself from, and on inspection the differentiation holds:
+  SICA's methodology cannot answer RQ1-RQ3 as posed here.
+- **Zhang, Zhao, Foerster, Clune, et al., "Hyperagents" (DGM-Hyperagents,
+  arXiv 2603.19461, `facebookresearch/HyperAgents`)** — DGM's own original
+  author extending DGM to make the meta-level modification procedure itself
+  editable. Read in full: same gap as SICA (no elicitation-vs-expansion test,
+  no independent frontier estimate), and the authors *themselves* list
+  "evaluation protocols remain fixed" as a stated limitation of their own
+  work — i.e., they've conceded the exact gap RQ1-RQ3 target. Also a strong
+  candidate second `S_evo` implementation for this study (see
+  `docs/DECISIONS.md` D-12), independent of its relevance here as prior art.
+- **Starace, "Scaffold Effects on GAIA: A Controlled Comparison" (arXiv
+  2606.08529)** — not a self-improvement paper, but the closest *methodological*
+  relative: a preregistered, controlled comparison across fixed scaffolds and
+  five frontier models, quantifying the elicitation gap directly (up to 28
+  points from scaffold choice alone) and rejecting its own preregistered
+  hypothesis that more-capable models are less scaffold-sensitive. Confirms
+  the elicitation-gap framing and preregistration discipline this proposal
+  already uses are the current bar in this space, not overkill. Its scaffolds
+  are static, never evolving — the structural difference from RQ1/RQ2 here.
+- **METR / Apollo Research's elicitation-gap and time-horizon work** —
+  established the "elicitation is a lower bound on capability" framing and
+  best-of-N-style measurement this proposal's frontier estimator extends into
+  the self-improvement setting. Strong citable grounding for *why* the
+  statistical machinery (§5.4's Clopper-Pearson/Good-Turing/Chao1) is the
+  right tool, not a competing claim — full text not yet read, flagged in
+  D-36 as a remaining gap before submission.
+- Checked and set aside as lower-overlap: **The Red Queen Gödel Machine**
+  (arXiv 2606.26294 — co-evolves the *evaluator*, a different question),
+  **Meta-Agent Challenge** (arXiv 2606.04455 — benchmarks meta-agents
+  building artifacts from scratch against human baselines, not capability
+  attribution), **DemoEvolve** (arXiv 2605.24539 — sparse-feedback harness
+  evolution in long-horizon games), **SIA** (arXiv 2605.27276 — updates model
+  weights *and* harness, outside this proposal's frozen-`M` premise but a
+  useful citation for why keeping `M` frozen is necessary for clean
+  attribution).
+
+**The gap this fills:** no current work isolates whether frozen-model
+self-improving agents cross a rigorously estimated capability frontier, nor
+decomposes any gain into expansion vs. elicitation vs. overfitting, nor ties
+crossings to an inspectable support-preserving/expanding partition. That gap
+held up under a first novelty check against the current 2025-2026 wave (SICA
+and Hyperagents came closest and both fall short of it on inspection) but
+that check should be redone as a proper citation-graph search before
+submission, not trusted as final. The instrument itself — reusable across
+future self-improving systems — is a contribution independent of which
+hypothesis wins.
 
 ---
 
@@ -214,4 +273,4 @@ The study is deliberately small-scale, uses frozen models, runs all self-modifyi
 
 ---
 
-*Draft v1 — intended as a working document to hand to a mentor and iterate on. Open questions to resolve next: final benchmark selection, exact `N_max`/task-count budget, and whether to add a third model family.*
+*Draft v1 — intended as a working document to hand to a mentor and iterate on. Open questions to resolve next: final `S_evo` fork choice (`docs/DECISIONS.md` D-12 — HGM recommended as primary, HyperAgents as a second variant, pending confirmation), exact `N_max`/task-count budget (D-14/D-32, thresholds proposed and reasoned, pending sign-off), and whether to add a third model family (D-15). A first novelty pass against the current literature is in §10/D-36 — redo it properly (full citation-graph search, full METR/Apollo text) before submission.*

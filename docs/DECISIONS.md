@@ -680,33 +680,105 @@ project's scope
 Not resolving (a) vs (b) here — that is itself a design decision worth its own
 discussion once a host exists, not something to guess at now.
 
+**Update, 2026-08-01 — (b) scoped concretely by shallow-cloning `metauto-ai/HGM`
+and reading the actual source**, rather than continuing to guess at its shape.
+Findings that change the cost estimate:
+
+- HGM ships **complete, working harnesses for both benchmarks already** —
+  `swe_bench/harness.py` and `polyglot/harness.py`, plus a `Dockerfile` at
+  repo root. Nothing needs to be built to get SWE-bench Verified or Polyglot
+  running against `S_evo`; `evaluate_agent.py --split Verified` is a real,
+  already-supported invocation (the `--split` arg is passed straight to
+  `load_dataset(f'princeton-nlp/SWE-bench_{split}')`).
+- **Both interception points D-24's `InterceptionSession` needs already exist
+  as single, well-defined choke points** — confirmed by reading the code, not
+  inferred: every model call in the loop funnels through
+  `llm.py:get_response_from_llm`/`create_client` (the exact function D-12
+  already identified as needing the ~20-30 line local-endpoint patch), and
+  every verification funnels through `hgm_utils.eval_agent` →
+  `swe_bench.harness.harness(...)` (Docker-per-instance, one call site). This
+  is exactly the shape `InterceptingModelClient`/`InterceptingVerifier` were
+  designed to wrap — no redesign of D-24/D-25 needed, just pointing them at
+  a different pair of call sites than the synthetic `example_agents.py` ones
+  they were validated against.
+- **What (b) actually costs, concretely, is now:** (i) the `llm.py` local-
+  endpoint patch (already scoped, ~20-30 lines); (ii) a thin wrapper that
+  monkeypatches/subclasses HGM's `create_client`/`eval_agent` call sites to
+  route through `cbs`'s interceptors instead of calling straight through;
+  (iii) a `cbs` task-family-shaped **wrapper**, not a reimplementation, around
+  SWE-bench Verified for `S0`/`S_star`'s own frontier estimation, so all three
+  scaffolds are measured against the same substrate — likely reusing HGM's own
+  `swe_bench/harness.py` directly rather than porting SWE-bench Verified into
+  `cbs.tasks.schema.Task` from scratch, since re-deriving a from-scratch
+  assert-based verifier for SWE-bench (a git-diff-and-run-tests benchmark) is
+  exactly the kind of reinvention D-33 already decided against for
+  LiveCodeBench.
+- **Recommendation, given the best-paper ambition (§ this session):** (b),
+  not (a). It's both more faithful to each fork's published methodology (a
+  reviewer-legible strength, per the earlier NeurIPS discussion) and, now that
+  it's actually been scoped, *not* the heavier of the two options — (a) still
+  requires inventing a translation layer between two task representations
+  that were never designed to correspond; (b) reuses working harness code
+  directly. The one real cost (b) still has that (a) wouldn't: Docker-per-
+  instance verification is unavoidable and couples this tightly to D-23 —
+  but D-23 is already a hard requirement for running `S_evo` at all (D-23),
+  so (b) adds no *new* infrastructure dependency, just uses the one already
+  required more thoroughly.
+
+**Still not a final decision** — recorded here as a concrete scoping so the
+choice is "confirm (b)" rather than "figure out what (b) even costs," which
+is what this update resolves.
+
 ### Comparison
 
-| | `jennyzzt/dgm` | `metauto-ai/HGM` |
-|---|---|---|
-| License | Apache-2.0 | Apache-2.0 |
-| Stars | 2204 | 405 |
-| Last push (as of 2026-08-01) | 2025-08-13 — ~1 year stale | 2026-02-07 — actively maintained |
-| Open issues | 26 | 5 |
-| Venue | arXiv 2505.22954 | ICLR 2026 oral (arXiv 2510.21614) |
-| Core agent/model/task code | original | same code, inherited from DGM |
-| Selection mechanism | flat archive; score-proportional / best / random parent choice | clade/subtree promise estimation (the paper's actual contribution) |
+**Updated 2026-08-01 with a third candidate, `facebookresearch/HyperAgents`,
+surfaced by the D-36 literature check — it is DGM's own original author
+(`jennyzzt`) extending DGM herself, alongside Jeff Clune and Jakob Foerster,
+so it needed weighing on the same footing as HGM, not left as a side note.**
+
+| | `jennyzzt/dgm` | `metauto-ai/HGM` | `facebookresearch/HyperAgents` |
+|---|---|---|---|
+| License | Apache-2.0 | Apache-2.0 | **CC BY-NC-SA 4.0 — non-commercial, share-alike** |
+| Stars | 2204 | 405 | 2655 |
+| Last push (as of 2026-08-01) | 2025-08-13 — ~1 year stale | 2026-02-07 | 2026-07-31 — updated yesterday |
+| Open issues | 26 | 5 | 29 |
+| Venue | arXiv 2505.22954 | ICLR 2026 oral (arXiv 2510.21614) | arXiv 2603.19461 (not yet at a named venue) |
+| Core agent/model/task code | original | same code, inherited from DGM | same lineage, restructured so the meta-level modification procedure is itself editable |
+| Selection mechanism | flat archive; score-proportional / best / random parent choice | clade/subtree promise estimation (the paper's actual contribution) | "hyperagents" — task agent + meta agent fused into one self-referential editable program; meta-level procedure evolves too |
+| Stated own limitation | — | — | authors themselves note "evaluation protocols remain fixed" — i.e. still no elicitation-vs-expansion test, same gap this project fills |
+
+**The license difference is the one new fact that actually matters for a
+decision, not just novelty tracking.** `HyperAgents` is CC BY-NC-SA 4.0, not
+Apache-2.0 — academic research use is fine, but: (a) any redistributed
+derivative touching its code must carry the same non-commercial/share-alike
+terms, which would force part of this project's own codebase to inherit that
+license if `EvolvedScaffold` code merges with it rather than calling it as a
+separate process; (b) CC licenses are designed for creative works, not
+software, and are a known source of ambiguity when applied to code (unclear
+how "share-alike" interacts with e.g. a paper's supplementary-material
+release). Neither DGM nor HGM has this complication.
 
 ### Recommendation
 
-**`metauto-ai/HGM`**, over the brief's stated default (`jennyzzt/dgm`), for
-three reasons: it is materially more recently maintained (DGM's own repo has
-had no commits in a year); it studies a more sophisticated and more current
-selection mechanism, which is a more interesting test case for whether
-self-improvement crosses the frontier; and — critically — it costs **nothing
-extra** to integrate relative to DGM, since the integration-relevant code
-(model calling, task representation, tool surface) is identical between them.
-Keep `jennyzzt/dgm` available as the literature-baseline reference the brief
-asks for (§5.1: "a possible second `S_evo` variant"), not discarded.
+Still **`metauto-ai/HGM`** as the primary fork — the reasoning stands
+(actively maintained, more interesting selection mechanism, zero extra
+integration cost vs. DGM since the integration-relevant code is identical
+across all three). **`HyperAgents` is a strong second `S_evo` variant to run
+in addition, not instead of HGM**, if the best-paper ambition holds:its
+"meta-level procedure is itself editable" framing is a genuinely different
+selection mechanism, its own authors already admit the elicitation-vs-
+expansion gap this project targets, and running the crossing test across two
+independently-implemented mechanisms (HGM's clade/subtree selection vs.
+HyperAgents' self-referential meta-editing) is a materially stronger result
+than one implementation's idiosyncrasy — provided the license's non-commercial
+term is acceptable (it should be, for a research paper) and any HyperAgents-
+touching code is kept in a clearly separate, CC-BY-NC-SA-licensed module
+rather than merged into the rest of `cbs`. Keep `jennyzzt/dgm` available too,
+per the brief's own request for a literature-baseline reference (§5.1).
 
-**This is a recommendation, not a decision** — confirm before forking
-anything (D-12 in the table below stays open until then), and (a) vs (b)
-above needs a decision alongside it once a host is being provisioned.
+**Still a recommendation, not a decision** — confirm before forking anything,
+and (a) vs (b) from D-31 needs deciding alongside it once a host is being
+provisioned.
 
 ---
 
@@ -933,18 +1005,133 @@ probes are all correctly rejected outside the three now-excluded tasks.
 
 ---
 
+## D-36 — novelty check against current self-improvement/elicitation
+literature, prompted by a stated NeurIPS/best-paper ambition · **P (partial
+check, not exhaustive — see caveats)**
+
+**Why this exists:** the user stated the actual goal is not just "a working
+instrument" but the strongest possible paper, explicitly aiming at NeurIPS and
+naming a best-paper ambition. That raises the bar on novelty diligence enough
+to warrant checking the current literature *before* committing to the
+expensive infra path (D-23), rather than discovering an overlap after paying
+for GPU-hours. This was a web-search + abstract/full-text-fetch pass, not a
+systematic citation-graph review — treat it as a first pass that materially
+changes confidence, not a final clearance.
+
+**Method:** searched for recent (2025-2026) work on self-improving coding
+agents and on capability-elicitation-gap measurement, then read abstracts (and,
+where fetchable, full text via the ar5iv HTML mirror — raw arXiv PDFs failed
+to parse as text through `WebFetch`) for the closest seven hits.
+
+**What was checked and where each one sits relative to this project:**
+
+1. **SICA** (Robeyns, Szummer, Aitchison — arXiv 2504.15228, submitted as a
+   NeurIPS 2025 preprint). Structurally the closest match: a frozen model
+   wrapped by a self-editing scaffold, gains from 17%→53% on a SWE-bench
+   Verified subset. Confirmed by full-text read: **no frozen-model baseline
+   is independently estimated** (no repeated sampling / best-of-N / pass@k for
+   the base model alone), **no elicitation-vs-genuine-capability distinction is
+   tested or argued**, no preregistration, no contamination discussion. It
+   reports a performance delta and calls it self-improvement; it does not ask
+   or answer whether that delta reflects a wider reachable frontier. This is
+   the paper this project's contribution most needs to differentiate itself
+   from in a related-work section, and the gap is real: this project's whole
+   instrument is built to answer the question SICA's own methodology cannot.
+2. **Hyperagents / DGM-Hyperagents** (Zhang, Zhao, Foerster, Clune, et al. —
+   arXiv 2603.19461, `facebookresearch/Hyperagents`, open source). **This is
+   DGM's own original author (`jennyzzt`) extending DGM herself**, plus Jeff
+   Clune (open-endedness) and Jakob Foerster — i.e., the source lab is already
+   moving past plain DGM. Makes the meta-level modification procedure itself
+   editable ("hyperagents"), evaluated across coding/paper-review/robotics/math
+   grading, 5 seeds, frozen FM confirmed explicitly in-text. Full-text read:
+   **same gap as SICA** — no elicitation-vs-expansion test, no independent
+   frontier estimate of the frozen model, explicitly lists "evaluation
+   protocols remain fixed" as a stated limitation (i.e., they know their own
+   evaluation methodology doesn't do this). **Directly relevant to D-12**: the
+   fork landscape now has a third real option (DGM → HGM → Hyperagents), and
+   this needs folding into that decision, not just novelty tracking (see
+   updated "Still open" row below).
+3. **The Red Queen Gödel Machine** (Iacob et al., Cambridge/NVIDIA-affiliated,
+   arXiv 2606.26294, "preliminary preprint"). Different core question entirely
+   — co-evolving the *evaluator*/utility function under non-stationary
+   objectives (paper review, Olympiad grading), not capability attribution.
+   Low direct overlap; full PDF text wasn't machine-readable so this rests on
+   the abstract only.
+4. **Meta-Agent Challenge** (Lu et al., Ant Research, arXiv 2606.04455). A
+   benchmark for meta-agents building agent artifacts from scratch against a
+   held-out test set, focused on reward-hacking robustness and whether
+   meta-agents match human-engineered baselines. Adjacent territory
+   ("empirical proxy for evaluating recursive self-improvement") but a
+   different specific question; no elicitation-vs-expansion framing found.
+5. **DemoEvolve** (Che et al., arXiv 2605.24539) — demonstration-bootstrapped
+   harness evolution in sparse-feedback long-horizon game environments (Liar's
+   Dice, Balatro). Different domain, low overlap.
+6. **SIA** (Hebbar et al., arXiv 2605.27276) — explicitly updates *both*
+   harness and model weights, bridging what it calls the "harness-update" and
+   "test-time-training" schools. Not a frozen-model system at all, so outside
+   this project's premise, but useful as a related-work citation for *why*
+   this project deliberately keeps `M` frozen (isolating scaffold effects
+   requires it; SIA is the demonstration of what you lose — clean
+   attribution — by not doing so).
+7. **"Scaffold Effects on GAIA: A Controlled Comparison"** (Starace, arXiv
+   2606.08529) — not a self-improvement paper at all, but the closest match
+   found for this project's *methodological* lineage: a preregistered,
+   controlled comparison of three **fixed** scaffolds across five frontier
+   models, explicitly quantifying the "elicitation gap" (up to 28 points from
+   scaffold choice alone) and explicitly rejecting its own preregistered
+   hypothesis that more-capable models are less scaffold-sensitive. This
+   confirms the elicitation-gap framing, preregistration discipline, and
+   controlled-comparison rigor this project already uses are the current bar
+   in this space, not overkill — solo-authored, not yet at a named venue,
+   submitted one week before this check was run. Its scaffolds are static;
+   this project's is an *evolving* scaffold. That's the structural difference.
+   Also worth checking: METR's and Apollo Research's elicitation-gap /
+   time-horizon work (found via search, not yet read in full) is the
+   established source of the "elicitation is a lower bound" framing and the
+   best-of-N-style methodology this project's frontier estimator extends —
+   strong citable prior art for *why* the statistical machinery (Clopper-
+   Pearson, Good-Turing, Chao1) is the right tool, not a competing claim.
+
+**Net read:** the specific intersection this project occupies — apply
+elicitation-gap-style frontier estimation (established in the evals/safety
+literature) to the question of whether an *evolving* (DGM-style, not static)
+scaffold crosses that frontier, with a causally-verified (interception-based,
+not self-reported) attribution of which operations are support-preserving vs
+support-expanding, under preregistration — does not appear to be already
+published as of this check. Every self-improvement paper found reports
+performance deltas without isolating the base model's independent ceiling;
+every elicitation-gap paper found studies static scaffolds, not an evolving
+one. That gap looks real, not assumed.
+
+**Caveats, stated plainly rather than buried:**
+- This is 7 papers via search + abstract/full-text pass, not a systematic
+  citation-graph search (no Semantic Scholar backward/forward citation check
+  on DGM/HGM/SICA, no direct search of NeurIPS/ICML/ICLR 2026 accepted-papers
+  lists, no check of the METR/Apollo elicitation literature's full text).
+- Full PDF text extraction failed for two papers (RQGM, and the initial
+  attempt on SICA) via direct `WebFetch`; the ar5iv HTML mirror worked and
+  should be preferred over raw arXiv PDF links for any future check like this.
+- A real NeurIPS-quality related-work section needs this redone properly
+  (full citation-graph pass, full text of the METR/Apollo elicitation-gap
+  literature, a check of very recent — post-cutoff — submissions) before
+  submission, not just before committing to infra spend. Treat this entry as
+  "confidence materially improved, not "cleared."
+
+---
+
 ## Still open
 
 | # | Decision | Status | Needed by |
 |---|---|---|---|
-| D-12 | Primary `S_evo` fork — **researched, `metauto-ai/HGM` recommended over the brief's stated default**, awaiting confirmation (see write-up above) | **D** | Phase 4 execution |
+| D-12 | Primary `S_evo` fork — **researched three-way (DGM/HGM/HyperAgents), `metauto-ai/HGM` recommended as primary, `facebookresearch/HyperAgents` recommended as a second variant if running two** (full comparison and the CC-BY-NC-SA license caveat above), awaiting confirmation | **D** | Phase 4 execution |
 | D-13 | LiveCodeBench (investigated, real scope now known — needs sandbox stdin support + a new I/O-judge verification path, not just a loader; D-33) and SWE-bench Verified remain open. HumanEval→HumanEval+ (D-34) and MBPP→MBPP+ (D-35) are **done**. **note:** whichever fork is chosen likely makes SWE-bench Verified load-bearing, not optional (D-12) | **D** | before real capability claims |
-| D-31 | Adapt `cbs`'s simple function-completion tasks to DGM/HGM's git-repo-based agent (D-12's option (a)), vs. letting `S_evo` evolve natively against SWE-bench Verified/Polyglot and reserving `humaneval`/`mbpp`/`transfer_reasoning` for `S0`/`S_star` only (option (b)) | **D** | Phase 4 execution, alongside D-12 |
+| D-31 | Option (a) (adapt `cbs` tasks to the fork) vs. option (b) (native SWE-bench Verified/Polyglot) — **now concretely scoped by reading HGM's actual source (see write-up above); (b) recommended, and turns out cheaper than (a), not more expensive** | **D** | Phase 4 execution, alongside D-12 |
 | D-14 | Exact `N_max`, the `k`/`K` reliability threshold, and the interpretation matrix's three placement thresholds — **fully-reasoned recommendations now in `preregistration.md` §3 (D-32), awaiting sign-off**, not bare placeholders | **D** | before Phase 5 |
 | D-15 | Whether to add a third model family | **D** | Phase 3 (done otherwise) |
 | D-16 | Per-phase budget caps in dollars / GPU-hours | **D** | before first paid run |
 | D-17 | ~~Which reasoning set is the transfer family~~ — resolved: `transfer_reasoning`, D-30 | **C** | — |
 | D-23 | Provision a Linux host with both GPU and Docker | **D** | Phase 4 execution (blocking) |
+| D-36 | Novelty check against current literature (partial pass done, see write-up) — needs a full citation-graph pass + METR/Apollo elicitation-literature full-text read before submission | **D** | before submission, ideally before large infra spend |
 
 D-14 in particular must be fixed in `preregistration.md` **before** the full run,
 not after seeing results. D-23 is the practical blocker on actually *running*

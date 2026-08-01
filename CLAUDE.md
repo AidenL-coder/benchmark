@@ -2,10 +2,22 @@
 
 Read this first. It's the fast on-ramp — what this project is, what exists,
 what's actually been verified vs. assumed, what's blocked, and where to look
-for more depth. Everything here was true as of commit `b40bdfa` (8 commits on
-`main`, 312 tests passing — the last two commits are docs/research only, no
-code changed). If code and this file disagree, trust the code and `git log`
-— update this file when that happens.
+for more depth. Everything here was true as of commit `67dd4a7` (9 commits on
+`main`, 354 tests passing). If code and this file disagree, trust the code and
+`git log` — update this file when that happens.
+
+**The bar just changed.** The user has explicitly stated the goal is not just
+a working instrument but the strongest possible paper — targeting NeurIPS,
+with a stated best-paper ambition. That reshapes several calls that were
+previously "good enough": self-hosting an open-weight model instead of a
+hosted API (D-01/D-03 — verifiable frozen-ness and contamination visibility
+matter for reviewer trust), running two independently-implemented `S_evo`
+forks instead of one (D-12), leaning toward the harder-but-more-faithful
+option on D-31, and treating a real novelty/related-work check (D-36) as
+something to redo properly before submission, not a one-off. Read D-36 in
+`docs/DECISIONS.md` before assuming this space is unclaimed — it isn't
+empty, but the specific gap this project targets looked real as of the last
+check.
 
 ---
 
@@ -54,7 +66,7 @@ pre-registering is lost.
 | 5 | Crossing test, ablation matrix | determination **logic** done (`cbs.crossing`); running it for real is blocked (§3) |
 | 6 | Statistical plan, interpretation matrix, write-up | bootstrap CIs / BH correction / matrix placement **done**; the write-up itself needs real results |
 
-312 tests, all passing (`./venv/Scripts/python.exe -m pytest`, a few minutes —
+354 tests, all passing (`./venv/Scripts/python.exe -m pytest`, a few minutes —
 the HumanEval/MBPP tests each verify every reference solution *and* every
 derived public-test subset against the real sandbox, so they alone are well
 over a thousand subprocess executions).
@@ -80,31 +92,45 @@ figured out from scratch; it may already be decided or explicitly deferred.**
   CUDA, ROCm-incompatible). **The fix converges both needs**: a rented Linux
   instance with GPU + Docker (RunPod/Lambda/vast.ai-class) satisfies D-23 and
   the GPU requirement in one box.
-- **D-12 — which fork.** **Now researched** (source inspection + GitHub API
-  metadata for both, full write-up in `docs/DECISIONS.md`'s D-12 section).
-  **Recommendation: `metauto-ai/HGM`** over the brief's stated default
-  (`jennyzzt/dgm`) — HGM is literally built on DGM's codebase (same
-  `coding_agent.py`/`llm.py`/`llm_withtools.py`/task representation, confirmed
-  by diffing file listings), so the fork choice costs nothing extra to
-  integrate either way; HGM is materially more actively maintained (DGM's repo
-  has had no commits in a year vs. HGM's within the last several months) and
-  studies a more sophisticated, more current selection mechanism (clade/
-  subtree promise estimation, ICLR 2026 oral) — a better test case for the
-  study's actual question. **Not yet confirmed by the user** — a recommendation
-  in the log, not a decision made unilaterally, since forking is a bigger
-  commitment than most calls in this project.
-- **D-31 (newly surfaced by that research) — how `cbs` tasks meet the fork's
-  agent.** Both forks operate on real git repos via SWE-bench/Polyglot (edit +
-  bash tools, producing a diff), not on `cbs.tasks.schema.Task`-shaped
-  (prompt + assert-based tests) atomic function completions. Two paths, not
-  yet chosen, detailed in D-12/D-31: adapt each `cbs` task into a minimal
-  one-file git repo and bridge the diff through `EvolvedScaffold`, or let the
-  fork evolve natively against SWE-bench Verified/Polyglot and keep
-  `humaneval`/`mbpp`/`transfer_reasoning` for `S0`/`S_star` only. The second
-  path means **SWE-bench Verified stops being an optional "nice to have"
-  family (D-13) and becomes the substrate the fork choice actually commits
-  to** — a substantially heavier lift than `humaneval`/`mbpp` were, coupled
-  directly to D-23 (its harness runs a full Docker container per instance).
+- **D-12 — which fork.** **Now researched three ways**, not two — source
+  inspection + GitHub API metadata for all three, full write-up in
+  `docs/DECISIONS.md`'s D-12 section. **Recommendation: `metauto-ai/HGM` as
+  primary** over the brief's stated default (`jennyzzt/dgm`) — same
+  integration cost, more actively maintained, more interesting selection
+  mechanism (clade/subtree promise estimation, ICLR 2026 oral). **New as of
+  this session: `facebookresearch/HyperAgents`** surfaced by the D-36 novelty
+  check — it's DGM's own original author (`jennyzzt`) extending DGM herself
+  (with Jeff Clune, Jakob Foerster), pushed as recently as yesterday relative
+  to this check, and its own authors admit "evaluation protocols remain
+  fixed" (i.e. they haven't solved the elicitation-vs-expansion question
+  either). Given the paper's ambition, recommended as **a second `S_evo`
+  variant to run alongside HGM, not instead of it** — showing a result holds
+  across two independently-built evolutionary mechanisms is much stronger
+  than one implementation's idiosyncrasy. One real catch: **HyperAgents is
+  CC BY-NC-SA 4.0, not Apache-2.0** like DGM/HGM — fine for academic use, but
+  keep any code touching it in its own clearly-separated module rather than
+  merged into the rest of `cbs`, since share-alike would otherwise pull that
+  license onto whatever it's merged with. **Still not yet confirmed by the
+  user** — a recommendation in the log, not a unilateral decision.
+- **D-31 — how `cbs` tasks meet the fork's agent — now concretely scoped**,
+  not just framed as two abstract options. Shallow-cloned HGM and read the
+  actual source: it already ships **complete, working harnesses for both
+  SWE-bench Verified and Polyglot** (`swe_bench/harness.py`,
+  `polyglot/harness.py`, a repo-root `Dockerfile`; `evaluate_agent.py --split
+  Verified` is a real, already-supported invocation), and **both interception
+  points D-24 needs already exist as single, well-defined choke points** —
+  every model call funnels through `llm.py:get_response_from_llm`, every
+  verification funnels through `hgm_utils.eval_agent` →
+  `swe_bench.harness.harness(...)`. That means **option (b) — evolve natively
+  against SWE-bench Verified/Polyglot, keep `humaneval`/`mbpp`/
+  `transfer_reasoning` for `S0`/`S_star` only — turns out cheaper than option
+  (a) (adapting `cbs` tasks into one-file git repos), not more expensive**,
+  once actually scoped: (a) still requires inventing a translation layer
+  between two task representations that were never designed to correspond;
+  (b) reuses HGM's own harness code directly, and its one real cost (Docker-
+  per-instance verification) is already required for D-23 regardless. **Still
+  a recommendation pending confirmation**, but now "confirm (b)" rather than
+  "figure out what (b) costs" — full write-up in `docs/DECISIONS.md`.
 
 Everything reachable *without* those has been built: the full measurement
 layer, validated end-to-end against a deterministic mock model and against
