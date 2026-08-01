@@ -142,20 +142,29 @@ posture as `N_max`.
 
 - Frozen models: ≥2 families × ≥2 sizes. Proposed Qwen2.5-Coder-1.5B / 7B, plus
   one of Llama-3.x-8B or DeepSeek-Coder.
-- Primary (coding): original HumanEval and MBPP (sanitized) vendored and
-  integrated (`cbs.tasks.families.humaneval`/`.mbpp`; 164 + 427 problems, every
-  canonical/reference solution verified against the real sandbox —
-  docs/DECISIONS.md D-27/D-29). **[TO FIX]** before this backs a real
-  capability claim: upgrade to HumanEval+/MBPP+ (the originals' test suites
-  under-specify correctness) and add a LiveCodeBench slice and a SWE-bench
-  Verified subset.
+- Primary (coding): both original and evalplus-upgraded HumanEval and MBPP
+  vendored and integrated (`cbs.tasks.families.humaneval`/`.humanevalplus`/
+  `.mbpp`/`.mbppplus`; 164/163 + 427/374 problems, every canonical/reference
+  solution verified against the real sandbox — docs/DECISIONS.md
+  D-27/D-29/D-34/D-35). Use the "+" variants (`humanevalplus`, `mbppplus`)
+  over the originals for anything beyond instrument validation — both
+  upgrades are done. Validating each surfaced real upstream bugs (a task
+  whose own generated test fails its reference solution, a floating-point-
+  tolerance gap, three tasks whose generated test asserts nothing at all) —
+  all found empirically, excluded, and documented rather than silently
+  patched into the vendored data; see D-34/D-35 for each. **[TO FIX]** before
+  this backs a real capability claim: add a LiveCodeBench slice (investigated
+  and scoped as a materially bigger, cross-cutting change — D-33, not simply
+  "vendor another file") and a SWE-bench Verified subset.
 - Transfer (reasoning): resolved (D-17) — `transfer_reasoning`, 10
   hand-authored math/logic/combinatorics tasks (`cbs.tasks.families.transfer_reasoning`;
   D-30), never optimised on, frozen entirely into the `transfer` split.
 - Splits frozen and hashed **before** sampling (`cbs splits freeze`); the suite
   hash is quoted in results. Frozen so far: `data/splits/humaneval.json`
-  (85 train / 79 held-out), `data/splits/mbpp.json` (205 train / 222
-  held-out), `data/splits/transfer_reasoning.json` (10 transfer).
+  (85 train / 79 held-out), `data/splits/humanevalplus.json` (84 train / 79
+  held-out), `data/splits/mbpp.json` (205 train / 222 held-out),
+  `data/splits/mbppplus.json` (173 train / 201 held-out),
+  `data/splits/transfer_reasoning.json` (10 transfer).
 
 ---
 

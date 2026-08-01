@@ -812,12 +812,133 @@ everywhere else) or silently deprioritising it without explanation.
 
 ---
 
+## D-34 — vendored HumanEval+, a genuinely new (not reused) public-test
+derivation, and a real upstream bug found and excluded · **P**
+
+**Decision:** `cbs.tasks.families.humanevalplus` vendors `evalplus/humanevalplus`
+(Apache 2.0; `data/vendored/humanevalplus/ATTRIBUTION.md`) — the evalplus
+upgrade to HumanEval that D-27 flagged as needed before this family backs any
+real capability claim (the original's hidden tests under-specify
+correctness). Adds `numpy` as a new runtime dependency (the `humanevalplus`
+optional extra; every other family needs nothing beyond core `cbs`), since
+every task's hidden test uses `numpy.testing.assert_allclose` for
+floating-point-tolerant comparison.
+
+**Why this was not a drop-in swap of a file path in the existing loader.**
+HumanEval+'s tests are structured completely differently from original
+HumanEval's: instead of flat `assert candidate(...) == expected` statements,
+every task defines a `check(candidate)` function that builds `inputs`/
+`results` list literals and loops over them calling an `assertion()` helper.
+The original family's extraction (`ast.Assert` nodes referencing `candidate`)
+finds **nothing** here — reusing it unmodified would have silently degraded
+every task's `public_tests` to empty (a compile-only check), with no error to
+notice. `_derive_public_tests` here instead locates the `inputs`/`results`
+list-literal assignments via AST, truncates *the list elements* to their
+first half, and preserves every other statement in `check` verbatim and in
+order — deliberately not assuming a specific loop shape, only that `inputs`/
+`results` are literal lists safe to shorten.
+
+**A genuine upstream data bug found and excluded, not fixed.**
+`HumanEval/32` ("find_zero")'s generated hidden test asserts
+`_poly(*candidate(*inp), inp) <= 0.0001`. `find_zero` returns a single float
+root; `*` on a scalar raises `TypeError`. The task's *own reference solution*
+fails this assertion — confirmed directly, not inferred — which would make
+any correct candidate register as a failure on this specific task. This is
+evalplus's test-generation pipeline mis-templating the assertion for a
+problem shape (`list -> scalar`) unlike most HumanEval problems, not
+something this loader introduced. Excluded via `KNOWN_BROKEN_TASK_IDS`
+(default on, documented, reversible with `exclude_known_broken=False`) rather
+than either silently keeping a task that would corrupt its own frontier
+estimate, or editing the vendored copy — the vendored data stays a faithful,
+unmodified reproduction of evalplus's file; the exclusion lives in `cbs`'s
+loader, not in the data.
+
+**Validated the same way as every other real family**: all 163 (of 164,
+1 excluded) reference solutions pass the real sandbox; the derived public
+subset is checked against its own task's reference solution and blanked out
+on failure (same safety net as D-27); a sample of "return None" probes are
+all correctly rejected.
+
+---
+
+## D-35 — vendored MBPP+ (via the HF datasets-server API, no new dependency),
+materially easier than HumanEval+, and three more genuine upstream bugs found
+and excluded · **P**
+
+**Decision:** `cbs.tasks.families.mbppplus` vendors `evalplus/mbppplus` (378
+problems, Apache 2.0; `data/vendored/mbppplus/ATTRIBUTION.md`) — the D-29
+upgrade, same motivation as HumanEval+ (D-27/D-34): the original's test
+suites under-specify correctness.
+
+**Fetched differently than every other family so far.** MBPP+ ships no plain
+JSONL, only a parquet file — reading it directly would have meant adding
+`pandas`/`pyarrow` as a new project dependency for a one-time data fetch.
+Used the HF *datasets-server* rows API instead (`datasets-server.huggingface.co/rows`,
+paginated at 100 rows/request, 4 requests total), which returns the identical
+data as plain JSON. The vendored file is that JSON, concatenated — not a live
+dependency at import time.
+
+**Materially easier to integrate than HumanEval+ turned out to be, confirmed
+before assuming it**: each row retains the *original* small `test_list`
+(the same handful of flat asserts plain `mbpp` already uses) alongside the
+new, much larger `test` field. `public_tests` derivation therefore reuses
+`cbs.tasks.families.mbpp`'s existing mechanism completely unchanged — no new
+AST logic was needed the way HumanEval+'s `inputs`/`results`-inside-`check()`
+shape required (D-34). The expanded hidden `test` field also calls the
+candidate by its real entry-point name directly, matching plain MBPP's own
+convention (HumanEval+ aliases to a generic `candidate` instead).
+
+**Three more genuine upstream bugs found by the same validation discipline as
+every other family** — running every reference solution against the real
+sandbox, not assuming vendored "official" data is correct by default:
+
+1. **`Mbpp/590` ("polar_rect")** — evalplus's `is_floats()` helper does not
+   recognise a tuple mixing a tuple-of-floats *and* a complex number as
+   "float-ish," so the tolerance (`atol`) it would otherwise apply stays `0`
+   and the check falls through to exact tuple equality. `cmath.polar`'s
+   result differs from the vendored expected value in the last few
+   significant digits — ordinary cross-platform floating-point
+   non-reproducibility for a transcendental function, not a logic error —
+   and exact equality has no tolerance for that. A real, narrow gap in
+   evalplus's own tolerance-detection helper.
+2. **`Mbpp/737`, `Mbpp/787`, `Mbpp/794`** (all three wrap `re.search`,
+   returning `Match | None`) — confirmed by parsing **every** task's
+   `assertion()` function and checking for an `ast.Assert` node anywhere in
+   it, a full scan rather than trusting the handful a random sample happened
+   to catch: these three compute `exact_match = exp == (out is not None)`
+   and then **never assert it**. The function silently returns `None`
+   unconditionally — it verifies nothing, and a candidate that always
+   returns `None` regardless of input passes trivially. This is a more
+   severe defect than a precision gap: the test doesn't just occasionally
+   misfire, it never checks anything at all. Confirmed empirically (a
+   `return None` stub passes) before concluding it, not inferred from
+   reading the source alone.
+
+All four excluded via `KNOWN_BROKEN_TASK_IDS` (default on, documented,
+reversible with `exclude_known_broken=False`), same posture as D-34 — the
+vendored copy stays a faithful, unmodified reproduction of evalplus's file.
+
+**One more finding that is not a bug**: `Mbpp/599` ("sum_average") timed out
+at the family's default 20s — not because it's wrong, but because its
+reference solution computes `sum(range(1, number+1))` in pure Python against
+evalplus stress-test inputs up to ~10⁸, measured at ~25.5s for the full test
+at a generous timeout. Fixed with a per-task `TIMEOUT_OVERRIDES` entry (45s)
+rather than raising the default for all 378 tasks, which would slow the whole
+suite down to accommodate one outlier.
+
+**Validated the same way as every other real family**: all 374 (of 378, 4
+excluded) reference solutions pass the real sandbox; every derived public
+subset passes its own task's reference solution; a sample of "return None"
+probes are all correctly rejected outside the three now-excluded tasks.
+
+---
+
 ## Still open
 
 | # | Decision | Status | Needed by |
 |---|---|---|---|
 | D-12 | Primary `S_evo` fork — **researched, `metauto-ai/HGM` recommended over the brief's stated default**, awaiting confirmation (see write-up above) | **D** | Phase 4 execution |
-| D-13 | LiveCodeBench (investigated, real scope now known — needs sandbox stdin support + a new I/O-judge verification path, not just a loader; D-33), SWE-bench Verified, and upgrading HumanEval→HumanEval+/MBPP→MBPP+ (D-27/D-29) — **note:** whichever fork is chosen likely makes SWE-bench Verified load-bearing, not optional (D-12) | **D** | before real capability claims |
+| D-13 | LiveCodeBench (investigated, real scope now known — needs sandbox stdin support + a new I/O-judge verification path, not just a loader; D-33) and SWE-bench Verified remain open. HumanEval→HumanEval+ (D-34) and MBPP→MBPP+ (D-35) are **done**. **note:** whichever fork is chosen likely makes SWE-bench Verified load-bearing, not optional (D-12) | **D** | before real capability claims |
 | D-31 | Adapt `cbs`'s simple function-completion tasks to DGM/HGM's git-repo-based agent (D-12's option (a)), vs. letting `S_evo` evolve natively against SWE-bench Verified/Polyglot and reserving `humaneval`/`mbpp`/`transfer_reasoning` for `S0`/`S_star` only (option (b)) | **D** | Phase 4 execution, alongside D-12 |
 | D-14 | Exact `N_max`, the `k`/`K` reliability threshold, and the interpretation matrix's three placement thresholds — **fully-reasoned recommendations now in `preregistration.md` §3 (D-32), awaiting sign-off**, not bare placeholders | **D** | before Phase 5 |
 | D-15 | Whether to add a third model family | **D** | Phase 3 (done otherwise) |

@@ -20,7 +20,11 @@ dependencies = [
 serving = ["httpx>=0.27"]
 # Analysis / plotting for Phase 6.
 analysis = ["numpy>=1.26", "pandas>=2.0", "matplotlib>=3.8"]
-dev = ["pytest>=8.0", "pytest-timeout>=2.3"]
+# The humanevalplus and mbppplus task families' hidden tests import numpy
+# directly for float-tolerant assertions (data/vendored/{humanevalplus,mbppplus}
+# /ATTRIBUTION.md); every other family needs nothing beyond the core deps.
+evalplus = ["numpy>=1.24"]
+dev = ["pytest>=8.0", "pytest-timeout>=2.3", "numpy>=1.24"]
 
 [project.scripts]
 cbs = "cbs.cli:main"

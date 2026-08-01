@@ -47,7 +47,7 @@ pre-registering is lost.
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Config, model client, sandbox, budget accountant | **done** |
-| 1 | Task schema, verifier, frozen hashed splits | **done** — 4 families: `toy`, `humaneval` (164), `mbpp` (427), `transfer_reasoning` (10, hand-authored). SWE-bench Verified/HumanEval+/MBPP+ still open (D-13); LiveCodeBench investigated and scoped as a materially bigger, cross-cutting change, not started (D-33). |
+| 1 | Task schema, verifier, frozen hashed splits | **done** — 6 families: `toy`, `humaneval` (164), `humanevalplus` (163, D-34), `mbpp` (427), `mbppplus` (374, D-35), `transfer_reasoning` (10, hand-authored). Use the "+" variants over the originals for anything beyond instrument validation. SWE-bench Verified still open (D-13); LiveCodeBench investigated and scoped as a materially bigger, cross-cutting change, not started (D-33). |
 | 2 | Frontier estimation (Clopper-Pearson, Good-Turing, Chao1, rarefaction) | **done, DoD met** — validated against known ground truth, verifier false-positive rate checked at 0/600 |
 | 3 | `S0`, `S_star`, matched-compute harness, elicitation control | **done** |
 | 4 | `S_evo` measurement layer: interception-based tagging, ablation, archive | measurement layer **done**; *running* a real evolved scaffold is blocked (§3) |
@@ -118,12 +118,26 @@ endpoint (~20-30 lines; the DeepSeek/OpenRouter branches already show the
 pattern), resolving D-31, and bridging the agent function through
 `cbs.scaffolds.evolved.EvolvedScaffold`.
 
-**If not**, the reachable work without infra is: the HumanEval+/MBPP+
-upgrades (D-27/D-29), or getting sign-off on the `preregistration.md`
-`[TO FIX]` thresholds (D-14/D-32 — each now has full reasoning attached, not
-bare placeholders, so this is "review and confirm or push back," not "figure
-out from scratch") — that last one needs zero infra and can happen with the
-user right now.
+**If not**, the reachable work without infra is: getting sign-off on the
+`preregistration.md` `[TO FIX]` thresholds (D-14/D-32 — each now has full
+reasoning attached, not bare placeholders, so this is "review and confirm or
+push back," not "figure out from scratch") — needs zero infra and can happen
+with the user right now. Both HumanEval+ (D-34) and MBPP+ (D-35) upgrades are
+done as of this session.
+
+**Both "+" upgrades each surfaced real upstream bugs, found by validating
+against the real sandbox rather than trusting vendored "official" data**:
+`humanevalplus` excludes `HumanEval/32` (its generated test fails its own
+reference solution); `mbppplus` excludes four tasks (`Mbpp/590`: a
+floating-point-tolerance gap in evalplus's own `is_floats` helper;
+`Mbpp/737`/`787`/`794`: a generated `assertion()` function that computes a
+result and never asserts it — a non-functional test that accepts any
+candidate) and applies a per-task timeout override for one legitimately slow
+(not wrong) task. See D-34/D-35 for the full investigation of each — every
+exclusion is confirmed empirically (e.g. a `return None` stub actually made
+to pass), not inferred from reading source alone. If a third "+"-style family
+is ever added, budget time for this same validation pass; it has found real
+bugs in *every* real family so far (D-27 too), not just these two.
 
 **LiveCodeBench is investigated but deliberately not started** (D-33) — it
 looked like "one more family to vendor" the way HumanEval/MBPP were, but
