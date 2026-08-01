@@ -47,7 +47,7 @@ pre-registering is lost.
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Config, model client, sandbox, budget accountant | **done** |
-| 1 | Task schema, verifier, frozen hashed splits | **done** — 4 families: `toy`, `humaneval` (164), `mbpp` (427), `transfer_reasoning` (10, hand-authored). LiveCodeBench/SWE-bench Verified/HumanEval+/MBPP+ still open (D-13). |
+| 1 | Task schema, verifier, frozen hashed splits | **done** — 4 families: `toy`, `humaneval` (164), `mbpp` (427), `transfer_reasoning` (10, hand-authored). SWE-bench Verified/HumanEval+/MBPP+ still open (D-13); LiveCodeBench investigated and scoped as a materially bigger, cross-cutting change, not started (D-33). |
 | 2 | Frontier estimation (Clopper-Pearson, Good-Turing, Chao1, rarefaction) | **done, DoD met** — validated against known ground truth, verifier false-positive rate checked at 0/600 |
 | 3 | `S0`, `S_star`, matched-compute harness, elicitation control | **done** |
 | 4 | `S_evo` measurement layer: interception-based tagging, ablation, archive | measurement layer **done**; *running* a real evolved scaffold is blocked (§3) |
@@ -118,13 +118,27 @@ endpoint (~20-30 lines; the DeepSeek/OpenRouter branches already show the
 pattern), resolving D-31, and bridging the agent function through
 `cbs.scaffolds.evolved.EvolvedScaffold`.
 
-**If not**, the next reachable work without infra is: LiveCodeBench (SWE-bench
-Verified is now coupled to D-12/D-31, not independent), the HumanEval+/MBPP+
+**If not**, the reachable work without infra is: the HumanEval+/MBPP+
 upgrades (D-27/D-29), or getting sign-off on the `preregistration.md`
 `[TO FIX]` thresholds (D-14/D-32 — each now has full reasoning attached, not
 bare placeholders, so this is "review and confirm or push back," not "figure
 out from scratch") — that last one needs zero infra and can happen with the
 user right now.
+
+**LiveCodeBench is investigated but deliberately not started** (D-33) — it
+looked like "one more family to vendor" the way HumanEval/MBPP were, but
+turned out to be a materially bigger, cross-cutting change: the data mixes at
+least three test-execution conventions (stdin/stdout full-program judging,
+LeetCode-style class-method "functional" tests with encoded arguments,
+base64+zlib-compressed private tests), none of which fit `cbs`'s existing
+assert-based `Task`/`Verifier` model. Doing it properly needs
+`cbs.sandbox.ExecRequest` to grow stdin support in both backends, a parallel
+I/O-judge verification path outside `Verifier`'s marker-based logic, and
+touches `S_star`'s repair loop and `cbs.tasks.canonicalize`'s AST-based
+renaming (both currently assume "one function to call"). Read D-33's full
+write-up before starting this — it has the concrete schema, byte offsets that
+found real example rows of each convention, and exactly what would need to
+change where.
 
 ---
 

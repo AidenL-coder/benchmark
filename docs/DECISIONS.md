@@ -746,12 +746,78 @@ the researcher's call to make, not something to finalize on their behalf.
 
 ---
 
+## D-33 — LiveCodeBench is a materially bigger lift than HumanEval/MBPP were;
+scoped, not implemented · **D (deliberately, after real investigation)**
+
+**Investigated** (HF API metadata + range-fetched samples of the actual data,
+not just the paper/README) before attempting to vendor it the way
+HumanEval/MBPP were. The conclusion: it doesn't fit `cbs`'s existing
+assert-based `Task`/`Verifier` model the way every family so far has, and
+retrofitting it properly is a cross-cutting change, not a new loader file.
+
+**What the data actually looks like**, confirmed by fetching real rows from
+`livecodebench/code_generation_lite` (HF dataset, CC-licensed, not gated):
+
+- **Size**: six release-version files, ~130 MB to ~1.25 GB *each* (≈4.5 GB
+  total) — three to four orders of magnitude larger than HumanEval (214 KB)
+  or MBPP (255 KB). Committing this into the repo the way those were vendored
+  is not appropriate; it would need to be fetched/cached at run time into the
+  already-gitignored `data/raw/`, with only a small curated slice (brief §8
+  explicitly says "a LiveCodeBench slice", not the whole set) vendored small
+  and hashed.
+- **At least three distinct test-execution conventions**, not one:
+  - `testtype: "stdin"` (AtCoder/Codeforces problems) — the candidate is a
+    **full program** reading stdin and writing stdout; correctness is
+    string/whitespace comparison of captured output, not a return value.
+  - `testtype: "functional"` (LeetCode problems) — `starter_code` gives a
+    `class Solution:` method stub; `input`/`output` are JSON-string-encoded
+    representations of call arguments and the expected return value that need
+    parsing (not raw text) before a driver can instantiate the class,
+    reflectively call the right method, and compare.
+  - `private_test_cases` is base64+zlib-compressed (unlike `public_test_cases`,
+    which is a plain JSON string) — deliberate, per the dataset's own
+    "contamination-free" design goal, and needs decoding before use regardless
+    of which execution convention applies.
+- **`contest_date`** is present per problem and matters specifically for this
+  family: LiveCodeBench's whole premise is temporal — later releases contain
+  problems from contests after a model's pretraining cutoff, which is the
+  actual contamination-avoidance mechanism brief §8 asks this family to
+  provide. Picking *which* release/date-range to slice is therefore a real
+  methodological choice, not an implementation detail, and should probably be
+  made close to when a specific frozen model's pretraining cutoff is known.
+
+**Why this doesn't fit as a same-shape addition to `humaneval.py`/`mbpp.py`**:
+the "stdin" convention has no return-value/entry-point to call at all (the
+"candidate" is a whole program, not a function) and cannot be verified by
+`cbs.tasks.verifier.Verifier`'s current approach (concatenate candidate +
+assert-based tests into one script) without a fundamentally different
+execution model — running the candidate as its own subprocess per test case,
+piping input, capturing output. That needs `cbs.sandbox.ExecRequest` to grow
+stdin support (currently explicitly `stdin=subprocess.DEVNULL` in
+`SubprocessSandbox`, to prevent hangs) in **both** sandbox backends, plus a
+parallel verification path outside `Verifier`'s marker-based pass/fail logic
+(a marker doesn't make sense when correctness is "does captured stdout match,"
+not "did assertions complete"). And because several other pieces of the
+codebase implicitly assume "one function to call" — `S_star`'s public-test
+repair loop, `cbs.tasks.canonicalize`'s AST-based renaming (assumes a single
+function definition, not an arbitrary program or a class method) — a new I/O-
+judge task type would ripple into those too, not stay contained to a loader.
+
+**Decision: not implemented this session.** The "functional" (LeetCode)
+subset is closer to the existing model and might be tractable without the
+stdin/stdout extension, but confirming that needs a design pass, not another
+range-fetch. Flagging this clearly rather than either rushing a half-verified
+verification mode (the exact kind of shortcut this project has avoided
+everywhere else) or silently deprioritising it without explanation.
+
+---
+
 ## Still open
 
 | # | Decision | Status | Needed by |
 |---|---|---|---|
 | D-12 | Primary `S_evo` fork — **researched, `metauto-ai/HGM` recommended over the brief's stated default**, awaiting confirmation (see write-up above) | **D** | Phase 4 execution |
-| D-13 | LiveCodeBench, SWE-bench Verified, and upgrading HumanEval→HumanEval+/MBPP→MBPP+ (D-27/D-29) — **note:** whichever fork is chosen likely makes SWE-bench Verified load-bearing, not optional (D-12) | **D** | before real capability claims |
+| D-13 | LiveCodeBench (investigated, real scope now known — needs sandbox stdin support + a new I/O-judge verification path, not just a loader; D-33), SWE-bench Verified, and upgrading HumanEval→HumanEval+/MBPP→MBPP+ (D-27/D-29) — **note:** whichever fork is chosen likely makes SWE-bench Verified load-bearing, not optional (D-12) | **D** | before real capability claims |
 | D-31 | Adapt `cbs`'s simple function-completion tasks to DGM/HGM's git-repo-based agent (D-12's option (a)), vs. letting `S_evo` evolve natively against SWE-bench Verified/Polyglot and reserving `humaneval`/`mbpp`/`transfer_reasoning` for `S0`/`S_star` only (option (b)) | **D** | Phase 4 execution, alongside D-12 |
 | D-14 | Exact `N_max`, the `k`/`K` reliability threshold, and the interpretation matrix's three placement thresholds — **fully-reasoned recommendations now in `preregistration.md` §3 (D-32), awaiting sign-off**, not bare placeholders | **D** | before Phase 5 |
 | D-15 | Whether to add a third model family | **D** | Phase 3 (done otherwise) |
