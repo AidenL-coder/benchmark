@@ -1119,6 +1119,321 @@ one. That gap looks real, not assumed.
 
 ---
 
+## D-37 — D-23 resolved: real Docker+GPU host provisioned, HGM+vLLM+Docker
+confirmed working end-to-end · **C**
+
+**Host:** Lambda Labs on-demand instance (chosen over RunPod after discovering
+RunPod's shared multi-tenant Pods explicitly disable privileged/nested-Docker
+mode for security — confirmed by the user, not just documentation; RunPod's
+Bare Metal tier is sales-only, not self-serve, so not a viable fast path
+either). Lambda gives a real VM, not a shared container, so Docker works
+normally with no privileged-mode fight. 1x A10 (24GB VRAM), Ubuntu 22.04.5 +
+Lambda Stack, CUDA 12.8, persistent NFS filesystem mounted at
+`/lambda/nfs/cbs-project` for anything that must survive instance termination
+(the instance's local disk does not survive termination; the persistent
+filesystem does, at its own separate ~$0.20/GiB/month regardless of whether
+an instance is attached).
+
+**What's confirmed working, in order:**
+1. Docker with GPU passthrough (`docker run --gpus all` sees the A10).
+2. vLLM 0.26.0 serving `Qwen/Qwen2.5-Coder-7B-Instruct` via its OpenAI-
+   compatible endpoint (`--gpu-memory-utilization 0.85 --max-model-len
+   16384`, comfortably inside 24GB) — confirmed with a real generation, not
+   just a health check.
+3. **HGM already supports a local vLLM endpoint with no code changes** —
+   `llm.py`'s `create_client` has an `elif "vllm" in model.lower()` branch
+   (`base_url=f"http://{model[11:]}:8000/v1"`) in both the top-level `llm.py`
+   *and* the copy bundled with `best_agent/`. Model strings of the form
+   `vllm-model:<host>` route correctly (`model[11:]` slices off exactly the
+   11-character `"vllm-model:"` prefix). **This corrects D-12's original
+   estimate of a ~20-30 line patch to `llm.py` — that estimate was made
+   without cloning the repo and reading current source; HGM had already
+   added this itself.** `config.yaml`'s `self_improve_llm`/`downstream_llm`/
+   `diagnose_llm` all point at `vllm-model:localhost` — preserving the
+   single-frozen-model requirement, since HGM's own default already used one
+   model for all three roles.
+4. A real end-to-end run, on the *second* attempt (see the correction
+   directly below — the first attempt's apparent success was wrong, and
+   catching that mattered): HGM built a Docker image for `default_agent`,
+   ran it in a container against one Polyglot task, the containerized agent
+   called the locally-served model, and the model produced a real,
+   substantive response (670 completion tokens of genuine reasoning about
+   the task, `tool_calls=None` — no crash, no connection error, no
+   malformed-response error). The result was copied back to the host and a
+   real evaluation report was written (1 submitted, 1 completed, 0 resolved —
+   an empty patch, because the model chose to respond conversationally
+   rather than invoke a tool on this particular trial, not because anything
+   in the pipeline broke). **This is the brief's Phase 0 DoD** ("vLLM serves
+   a frozen model; the forked loop runs one tiny task end-to-end") **met for
+   real.** Whether a baseline agent reliably invokes tools/solves tasks is a
+   question about agent behavior — squarely what the actual study measures —
+   not something to keep "fixing" at the infrastructure level.
+
+**A claimed success that was actually wrong, caught only because it was
+checked rather than trusted — worth recording prominently, not quietly
+overwritten, because catching it is the same discipline this project
+already applies everywhere else (README/CLAUDE.md: "validate before building
+on top of something").** The *first* smoke test attempt looked like a clean
+success: it completed without crashing, produced a real evaluation report,
+and an in-container log line read `"Using vllm API with model
+vllm-model:localhost."`. That log line only proves the client was
+*configured* to attempt the call — not that the call *succeeded* — and this
+was initially misreported as confirmed end-to-end success on that basis
+alone. Checking the actual agent output file (not just the summary
+statistics) revealed the real content: `Error in get_response_withtools:
+Connection error.`, repeated five times. The model was never actually
+reached; the "empty patch" result was a masked total failure, not a benign
+non-solve. Two real, separate bugs were hiding behind that one misleading
+log line:
+
+- **Docker's default bridge network does not let a container reach the
+  host's `localhost`.** Confirmed empirically (a throwaway container hitting
+  `http://localhost:8000/health` timed out — `HTTP_000`) before assuming a
+  fix, then confirmed again after fixing it (same test against a
+  `--network host` container returned `HTTP_200`). HGM's own container
+  creation calls (`polyglot/docker_build.py` and, identically, the vendored
+  `swe_bench/SWE-bench/swebench/harness/docker_build.py`) set no network mode
+  at all, so containers got Docker's isolated default bridge network, in
+  which the container's own `localhost` is not the host's. **Fix:** added
+  `network_mode="host"` to both `client.containers.create(...)` calls
+  (originals preserved as `.orig` alongside). This is a deliberate,
+  documented relaxation of *network* isolation specifically to let the
+  container reach a locally-served model — it does not weaken the
+  filesystem/process isolation Docker provides for the untrusted candidate
+  code itself, which is D-23's actual safety requirement. Worth revisiting
+  if a future host runs genuinely untrusted network-facing services
+  alongside this project, which the current single-user research instance
+  does not.
+- **vLLM needs explicit flags for OpenAI-style tool calling.** Once the
+  network was fixed, the next real (non-connection-error) response was an
+  HTTP 400: `"auto" tool choice requires --enable-auto-tool-choice and
+  --tool-call-parser to be set`. HGM's agent code (`llm_withtools.py`) hard-
+  requires a populated `response.choices[0].message.tool_calls`, so this is
+  not optional. **Fix:** relaunched vLLM with `--enable-auto-tool-choice
+  --tool-call-parser hermes` — confirmed correct by checking the model's own
+  tokenizer chat template (fetched from its Hugging Face repo), which
+  defines Qwen2.5's native tool-call format as `<tool_call>{"name": ...,
+  "arguments": ...}</tool_call>` — the same tag convention `hermes` expects.
+  One operational trap hit while restarting: killing the vLLM API server
+  process (`pkill -f vllm.entrypoints.openai.api_server`) did **not** free
+  the GPU — its child engine process (a separate PID, named
+  `VLLM::EngineCore`, matching neither that pattern nor a `ps aux | grep
+  vllm`-friendly name) kept holding all 19.7GB VRAM, and the restarted server
+  failed with a GPU-memory error until that child was found via
+  `nvidia-smi --query-compute-apps` and killed by explicit PID.
+
+**Three further, separate real problems hit and fixed along the way, worth
+recording so a future session doesn't rediscover them the hard way:**
+
+1. **Never put a Python venv inside a directory a DGM-style fork treats as
+   its own source tree.** HGM's `copy_src_files` (used to snapshot each
+   archive node, `source_dir="."`  by default) copies *everything* not
+   excluded by `.dockerignore`. A venv created inside the HGM repo directory
+   is not excluded (HGM's own `.dockerignore` has no reason to expect one —
+   its own convention is conda, living outside the repo entirely), so it gets
+   swept into every node snapshot: one early attempt tried to copy over
+   50,000 files / 7.6GB (all of vLLM/torch/CUDA's source trees) before being
+   caught and killed. Fix: create the venv as a *sibling* directory
+   (`/lambda/nfs/cbs-project/hgm_venv`, not `hgm/venv`), not inside the
+   forked repo. This generalizes to whichever fork is ultimately used, not
+   just HGM.
+2. **The editable SWE-bench install has to be redone in whichever venv is
+   actually active.** `pip install -e swe_bench/SWE-bench` was run once in
+   the (wrong-location) venv before it was discovered and rebuilt elsewhere;
+   forgetting to redo it in the new venv produced a `ModuleNotFoundError:
+   swebench` crash inside `polyglot/test_spec.py` (Polyglot's own harness
+   imports `swebench.harness.utils` — Polyglot depends on the SWE-bench
+   *package*, not just its own benchmark data, confirming D-31's read that
+   these two benchmarks share real infrastructure, not just superficial
+   similarity).
+3. **The initial baseline evaluation's task count is not controlled by
+   `--max_task_evals`.** That flag only bounds the outer self-improvement
+   loop's iteration count. The *initial* baseline agent is always evaluated
+   against a fixed task list — for Polyglot, hardcoded in `hgm.py`'s `main()`
+   as `medium.json + small.json` (50 + 10 = 60 tasks), not a CLI-configurable
+   subset. A first "smoke test" attempt with `--max_task_evals 1` silently
+   tried to Docker-evaluate the baseline agent against all 60 tasks
+   sequentially (`--max_workers 1`) before the loop could even start —
+   nothing was wrong, it just wasn't going to finish in a smoke-test-sized
+   window. Fix used here: temporarily point `polyglot/subsets/medium.json`
+   at a 1-task list (and `small.json` at an empty list), run, then restore
+   the real files from backups — reversible, no permanent change to the real
+   subset definitions. **For the real run, this hardcoding is the thing to
+   budget: the "initial" baseline always costs 60 real Docker-evaluated
+   Polyglot tasks (or the SWE-bench equivalent) up front, before any
+   evolution happens, and that cost is fixed regardless of `--max_task_evals`
+   or `N_max` tuning elsewhere.**
+
+**One loose end, not yet resolved:** after the single-task evaluation
+completed successfully, the outer loop crashed with `ValueError: attempt to
+get argmax of an empty sequence` in `TS_sample`/`expand()` — HGM's
+node-selection logic choosing which archive entry to expand next. This is
+downstream of everything Phase 0's DoD requires and most likely an artifact
+of deliberately shrinking the task list to 1 for the smoke test (the
+promise-estimation statistics plausibly need more than one data point) rather
+than a real bug — but it has **not** been reproduced or root-caused against
+the real 60-task subset, and shouldn't be assumed fixed until it is. Flag for
+whoever runs the first real (non-smoke-test) evolution step.
+
+**Not yet done:** the actual measurement-layer bridge — routing HGM's model
+calls and verification calls through `cbs.scaffolds.evolved.InterceptionSession`
+so operations get tagged. This is real, non-trivial new code, not a
+configuration change: `EvolvedScaffold.solve()`'s current `AgentFunction`
+contract assumes one call per task, but HGM runs a long-lived archive search
+evaluating batches of tasks per node — the bridge has to monkeypatch HGM's
+own call sites (`llm.py`'s client functions; the SWE-bench/Polyglot harness
+call in `hgm_utils.eval_agent`) directly and reconstruct one `OperationTrace`
+per task afterward, rather than slotting an HGM agent into the existing
+`AgentFunction` shape unchanged.
+
+---
+
+## D-38 — `cbs.scaffolds.fork_bridge`: network-layer interception for HGM,
+validated against 7 real tasks, three real bugs found and fixed · **P**
+
+**This corrects D-12/D-37's framing, not just extends it.** D-12 concluded
+"no redesign of D-24/D-25 needed, just pointing them at a different pair of
+call sites," and D-37 still described the remaining work as needing to
+"monkeypatch HGM's own call sites (`llm.py`'s client functions...) directly."
+Both assumed in-process interception. That assumption doesn't hold for this
+fork's actual execution model — the agent runs as a separate OS process in a
+container, so there is nothing in-process to monkeypatch — and the mechanism
+built here (a network-layer reverse proxy) is not a variant of what either
+D-12 or D-37 anticipated.
+
+**What this is:** `EvolvedScaffold`/`InterceptionSession` (D-24/D-25) assume
+the untrusted agent is an in-process Python callable. HGM's agent code runs
+as a genuinely separate OS process inside a Docker container
+(`container.exec_run(...)`), so there is no in-process object to wrap.
+`cbs.scaffolds.fork_bridge` is the mechanism for that different situation:
+
+- `ModelCallProxy` — a real HTTP reverse proxy sitting between the
+  containerized agent and the actual model server, recording every
+  `/v1/chat/completions` request/response pair it forwards. This is the only
+  channel available for interception here, confirmed empirically (D-37): the
+  container reaches the model over real HTTP, not an in-process call.
+- `reconstruct_trace_from_events` — a pure function turning one task's
+  captured conversation into a `cbs.scaffolds.tagging.OperationTrace`.
+  Deliberately does not reuse `InterceptionSession._was_conditioned_on`: that
+  heuristic resolves an ambiguity (blind selection vs. real conditioning)
+  that doesn't arise here, because HGM's `coding_agent.py` runs one
+  continuously-growing tool-use conversation per task, not N independent
+  generate-then-select branches (confirmed by reading `llm_withtools.py`).
+  Every tool round-trip is unambiguously `tool_call` (support-expanding);
+  the existing registry entry already covers it without needing a new one.
+- Verification (does the final patch solve the task) is computed by ordinary
+  host-side Python (`polyglot.harness.process_entry`), not inside the
+  container, so it needs no proxying — confirmed by reading the function in
+  full: it runs the actual hidden test suite and returns `eval_result`
+  directly (`"resolved"` = passed), so this bridge calls it directly rather
+  than needing any separate verifier hook.
+
+**A tool-count correction to D-12, found while writing this entry, worth
+recording as an example of exactly the kind of mistake this project's own
+"verify, don't assume" discipline exists to catch.** An earlier draft of
+this entry stated HGM's tool surface as four tools (`bash`, `python_executor`,
+`file_editor`, `ast_editor`), sourced from reading `best_agent/tools/*.py`
+during an earlier exploratory pass. Checked again while finalizing this
+entry: the agent actually executed in every validated run below copies its
+tools from the **top-level** `hgm/tools/` directory into the container
+(confirmed directly from the real run logs: `"Copying
+measured_default_agent/src/tools to container at /hgm/tools"`), and that
+directory has exactly **two** tools — `bash.py` and `edit.py` — matching
+D-12's original "entire tool surface" claim exactly. `best_agent/tools/` is
+a separate, unused-in-these-runs agent bundle with a larger toolset; citing
+it was simply a wrong file to have checked, not a real discrepancy with
+D-12. `edit.py` (view/create/edit files, no execution) is functionally the
+same category as the `file_editor`/`ast_editor` tools the wrong draft
+described, so the classification conclusion (both `bash` and `edit` map to
+the existing `tool_call` registry entry, no new entry needed) is unaffected
+— only the specific file names and count were wrong.
+
+**Built test-first, validated in stages, not deployed blind:**
+1. `ModelCallProxy` + `reconstruct_trace_from_events` unit-tested locally
+   against a real (not mocked) backend HTTP server and hand-built
+   OpenAI-shaped conversation histories (`tests/test_fork_bridge.py`, 14
+   tests) — including the deliberately tricky case of a tool being
+   *requested* but never actually run, which must NOT count as `tool_call`.
+2. Deployed alongside HGM (`scripts/hgm_run_task_with_interception.py`,
+   NOT part of the `cbs` package since it imports HGM's own modules
+   directly) and run against real tasks, checked against ground truth by
+   hand, not just trusted because the pieces were unit-tested.
+
+**Three real bugs found running it for real, not three imagined ones:**
+
+1. **A module-level global, not a function parameter.** `process_entry`
+   takes no model-string argument at all — `hgm.py`'s own `main()` sets the
+   actual model string as `polyglot.harness.llm` (a module global) before
+   calling into the harness. My first real run skipped this, so it defaulted
+   to `""`, `create_client` fell through to the OpenRouter branch, and the
+   run produced `n_proxy_events: 0` with an empty patch — a silent, total
+   failure to reach the model at all, not a benign non-solve. Caught by
+   reading the actual log line (`"Using OpenRouter API with model ."`), not
+   by trusting the JSON summary. Fixed by setting the global explicitly
+   before calling `process_entry`, with the distinction from
+   `model_name_or_path` (a label, not a model string) documented directly in
+   the script's `--llm-model-string` help text so it isn't rediscovered.
+2. **`process_entry` does not build Docker environment images itself** —
+   that setup lives in `harness()`'s own batch orchestration
+   (`build_env_images(...)`, called once before its `ThreadPoolExecutor`
+   loop), which calling `process_entry` directly bypasses. First hit as
+   `Error building image ...: Environment image ... not found` for a task
+   whose image hadn't been built in an earlier session. Fixed by mirroring
+   `harness()`'s own setup step in the script (calling `build_env_images`
+   before the per-task loop), not working around the missing image.
+3. **A real race condition in `ModelCallProxy` itself**, caught via the
+   project's own re-verification discipline, not luck: a docstring-only edit
+   triggered an unrelated intermittent test failure a few minutes after
+   writing (and, ironically, right after documenting the very same race as
+   "never observed in practice" in that docstring). The handler recorded a
+   call *after* writing the response to the client, so a caller reading
+   `.events` immediately after its own request returned could race ahead of
+   the record — genuinely observed, not hypothetical. Fixed by recording
+   before responding, which removes the race structurally rather than
+   relying on timing to avoid it; confirmed by running the previously-flaky
+   test 10 times consecutively (all clean) before trusting it, and by
+   deploying the same fix to the remote instance's copy of the file (which
+   is not live-synced from this repo — a separate `pip install -e` copy that
+   would otherwise have kept the same latent bug). Independently
+   re-confirmed still present and correctly deployed on the remote instance
+   during review of this entry.
+
+**Validated against 7 real Polyglot tasks** (`javascript__queen-attack`,
+`java__sgf-parsing`, `javascript__robot-name`, `python__dominoes`,
+`go__dominoes`, `cpp__all-your-base`, plus one earlier repeat) against the
+`default_agent` baseline. One result cross-checked by hand against the raw
+`.md` transcript: the bridge's classification (`single_call`,
+`had_tool_calls: false`) matched the actual raw model response
+byte-for-byte, not just a plausible-looking summary.
+
+**Not yet validated: a real tool-call round trip.** All 7 real tasks so far
+show the model making exactly one plain generation and stopping — never
+invoking `bash`/`edit`, despite `tool_choice="auto"` and the tools being
+correctly exposed (confirmed: `get_response_withtools`'s non-OpenAI branch —
+the one `vllm-model:...` strings route through — correctly calls
+`client.chat.completions.create(..., tools=tools, tool_choice="auto")`, and
+`check_for_tool_use` correctly reads `response.choices[0].message.tool_calls`,
+exactly matching vLLM's actual response shape; no code-path mismatch). This
+looks like a real, plausible behavioural characteristic of a 7B baseline
+model given only `tool_choice="auto"` (smaller models are well known to be
+less reliable at spontaneous tool use), not a bug — but it has not been
+confirmed by seeing a real positive case, only inferred by ruling out the
+alternative explanations. The `tool_call` classification path itself remains
+proven only against synthetic conversations, not real ones, until one
+actually occurs.
+
+**Operational note, not a correctness issue:** the validation runs above
+left real (low-cost) clutter on the remote instance — ~27GB of Docker
+images and ~20GB of build cache (mostly reclaimable, includes six leftover
+per-task Polyglot eval images never pruned), three stopped `hello-world`
+test containers, and a scatter of ad-hoc log files at the top level of
+`/lambda/nfs/cbs-project/`. None of it is costing active compute (idle load,
+no running containers, disk at 6% of 1.4TB), but it's worth a
+`docker system prune` + log cleanup pass before the instance is handed to
+the next session.
+
+---
+
 ## Still open
 
 | # | Decision | Status | Needed by |
@@ -1130,10 +1445,12 @@ one. That gap looks real, not assumed.
 | D-15 | Whether to add a third model family | **D** | Phase 3 (done otherwise) |
 | D-16 | Per-phase budget caps in dollars / GPU-hours | **D** | before first paid run |
 | D-17 | ~~Which reasoning set is the transfer family~~ — resolved: `transfer_reasoning`, D-30 | **C** | — |
-| D-23 | Provision a Linux host with both GPU and Docker | **D** | Phase 4 execution (blocking) |
+| D-23 | ~~Provision a Linux host with both GPU and Docker~~ — **resolved, D-37**: Lambda Labs A10 instance, Docker+GPU+vLLM confirmed working, Phase 0 DoD met for real | **C** | — |
 | D-36 | Novelty check against current literature (partial pass done, see write-up) — needs a full citation-graph pass + METR/Apollo elicitation-literature full-text read before submission | **D** | before submission, ideally before large infra spend |
+| D-37 | Root-cause the `TS_sample` argmax-on-empty crash against the real 60-task subset (not yet reproduced at real scale — only hit under a deliberately shrunk 1-task test) | **D** | before any measured `S_evo` run |
+| D-38 | Validate `tool_call` classification against a real tool-invoking episode — not yet observed in 7 real attempts (D-38); consider `tool_choice="required"` or a task more likely to need iteration, as a targeted way to get one rather than continuing to sample randomly | **D** | before any measured `S_evo` run |
 
 D-14 in particular must be fixed in `preregistration.md` **before** the full run,
-not after seeing results. D-23 is the practical blocker on actually *running*
-Phase 4/5 — its measurement layer is built and tested (D-24 through D-26), but
-has nothing safe to run against without it.
+not after seeing results. D-23 is resolved (D-37) — the practical blocker on
+actually *running* Phase 4/5 is now the measurement-layer bridge itself, not
+infrastructure.

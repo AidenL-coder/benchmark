@@ -2,9 +2,14 @@
 
 Read this first. It's the fast on-ramp — what this project is, what exists,
 what's actually been verified vs. assumed, what's blocked, and where to look
-for more depth. Everything here was true as of commit `67dd4a7` (9 commits on
-`main`, 354 tests passing). If code and this file disagree, trust the code and
-`git log` — update this file when that happens.
+for more depth. Last commit is `7000dc4`, but there is substantial
+**uncommitted** work on top of it as of this writing: `docs/DECISIONS.md`
+and this file both modified, plus three new untracked files —
+`src/cbs/scaffolds/fork_bridge.py`, `tests/test_fork_bridge.py` (368 tests
+now passing locally, up from 354), and `scripts/hgm_run_task_with_interception.py`.
+Nothing from this session has been committed yet — check `git status`
+before assuming otherwise. If code and this file disagree, trust the code
+and `git log` — update this file when that happens.
 
 **The bar just changed.** The user has explicitly stated the goal is not just
 a working instrument but the strongest possible paper — targeting NeurIPS,
@@ -78,20 +83,66 @@ second stop after this file.
 
 ## 3. What's actually blocked, and why
 
-Two things, both logged as open decisions in `docs/DECISIONS.md`'s "Still
-open" table — **check that table before assuming something needs to be
-figured out from scratch; it may already be decided or explicitly deferred.**
+**D-23 is resolved as of this session — read this before assuming infra is
+still the blocker.** A real Docker+GPU host now exists and has been proven
+working end-to-end (D-37 in `docs/DECISIONS.md` has the full write-up, and
+it is worth reading in full — it includes a real self-correction, not just a
+success story):
+Lambda Labs on-demand instance (RunPod's shared multi-tenant Pods turned out
+to disable privileged/nested-Docker mode entirely — confirmed, not assumed —
+so Lambda was used instead; a real VM, not a shared container, so Docker just
+works), 1x A10 (24GB), Docker confirmed with GPU passthrough, vLLM 0.26.0
+serving `Qwen/Qwen2.5-Coder-7B-Instruct`, HGM cloned and run for a real
+single-task end-to-end smoke test. **The first attempt's apparent success was
+wrong** — it looked clean (no crash, a real evaluation report) but the
+in-container log line it was judged by only proved the model client was
+*configured*, not that the call *succeeded*; the actual agent output showed
+five straight connection errors, because Docker's default bridge network
+doesn't let a container reach the host's `localhost` at all. Caught only by
+checking the real output file instead of trusting the summary, per this
+project's own stated discipline. Two real fixes followed: `network_mode="host"`
+added to both container-creation call sites (HGM's own and the vendored
+SWE-bench harness's), and vLLM relaunched with `--enable-auto-tool-choice
+--tool-call-parser hermes` (HGM's agent hard-requires structured
+`tool_calls`, confirmed against the model's own chat template). The *second*
+attempt is the real one: the containerized agent reached the model and got
+a genuine 670-token substantive response — no error, `tool_calls=None`
+because the model chose not to invoke a tool on that specific trial, which
+is a question about agent behavior (exactly what this study measures), not
+a broken pipeline. **The brief's Phase 0 DoD is met for real.** Three further
+setup mistakes were made and fixed along the way (venv placed inside the
+forked repo got swept into every archive-node snapshot; the editable
+SWE-bench install had to be redone after moving the venv; the initial
+baseline's task count turned out not to be controlled by `--max_task_evals`
+at all) — full detail in D-37, worth reading before
+repeating any of them. **One thing is not yet resolved**: a `TS_sample`
+argmax-on-an-empty-sequence crash in the node-selection logic, hit only after
+deliberately shrinking the task set to 1 for the smoke test — plausibly an
+artifact of that shrinkage, not a real bug, but not reproduced or root-caused
+against the real 60-task subset yet.
 
-- **D-23 — no Docker+GPU host.** This dev machine has no Docker, and **Colab's
-  runtime cannot nest Docker either** (not a missing package — a platform
-  constraint). Running `S_evo` means executing self-modifying orchestration
-  code with live network access to a model endpoint, which the brief's own
-  safety guardrail (§10) requires Docker for. There is currently nowhere in
-  this project's reach that can do that safely. Real frontier sampling at
-  scale also needs a GPU this machine doesn't have (a Radeon Pro 580 — no
-  CUDA, ROCm-incompatible). **The fix converges both needs**: a rented Linux
-  instance with GPU + Docker (RunPod/Lambda/vast.ai-class) satisfies D-23 and
-  the GPU requirement in one box.
+**The measurement-layer bridge itself is now built (D-38), correcting the
+"just monkeypatch it" framing this file and D-12/D-37 used to have.** HGM's
+agent runs as a separate OS process inside a Docker container, not something
+`InterceptionSession` can wrap in-process — so `cbs.scaffolds.fork_bridge`
+intercepts at the network layer instead (`ModelCallProxy`, a real reverse
+proxy between the container and the model server). Unit-tested locally
+(`tests/test_fork_bridge.py`, 14 tests against a real backend server) and
+then validated against 7 real Polyglot tasks, catching three real bugs along
+the way — a module-level global (`polyglot.harness.llm`) that has to be set
+before calling `process_entry`, a missing `build_env_images` setup step, and
+a genuine race condition in the proxy itself (caught by re-running tests
+after an unrelated edit, not by design review — see D-38 for the full,
+slightly humbling story). **Still open**: every real task run so far shows
+the baseline agent making one plain generation and stopping, never actually
+invoking a tool — plausibly real 7B-model behavior with `tool_choice="auto"`,
+not a bug (the code path was checked and is correct), but the `tool_call`
+classification remains validated only against synthetic conversations, not
+a real tool-call round trip, until one is observed.
+
+**What's actually still open**, logged in `docs/DECISIONS.md`'s "Still open"
+table — check that table before assuming something needs to be figured out
+from scratch:
 - **D-12 — which fork.** **Now researched three ways**, not two — source
   inspection + GitHub API metadata for all three, full write-up in
   `docs/DECISIONS.md`'s D-12 section. **Recommendation: `metauto-ai/HGM` as
@@ -227,7 +278,7 @@ cbs compare --config configs/compare_toy_mock.yaml --dry-run
 - **Validate before building on top of something.** Every new task family got
   its reference solutions run through the *real* sandbox before being trusted
   — this found real bugs twice (HumanEval's multi-line/loop-scoped assertion
-  extraction, D-27; a hand-computed test value in the transfer family, D-30).
+  extraction, D-27; a hand-compute  d test value in the transfer family, D-30).
   Assumption is cheap; a subprocess run is cheaper than a wrong result later.
 - **Every non-obvious decision gets a `docs/DECISIONS.md` entry**, not just a
   code comment — rationale, what was measured, and what it rules in/out. If
