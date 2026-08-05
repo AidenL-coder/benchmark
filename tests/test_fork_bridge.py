@@ -193,7 +193,7 @@ class TestModelCallProxyRecording:
         assert len(proxy.events) == 1
 
 
-def _event(messages: list[dict], tool_calls: list | None = None) -> ProxiedCall:
+def _event(messages: list[dict], tool_calls: list | None = None, status: int = 200) -> ProxiedCall:
     return ProxiedCall(
         request_body={"messages": messages},
         response_body={
@@ -201,6 +201,7 @@ def _event(messages: list[dict], tool_calls: list | None = None) -> ProxiedCall:
                 {"message": {"role": "assistant", "content": "...", "tool_calls": tool_calls}}
             ]
         },
+        status=status,
     )
 
 
@@ -296,3 +297,160 @@ class TestReconstructTraceFromEvents:
         trace = reconstruct_trace_from_events(events)
         assert trace.op_counts() == {"single_call": 1}
         assert not trace.used_expanding
+
+    def test_a_failed_call_is_not_counted_as_a_single_call(self):
+        """A backend error/timeout never sampled from M -- counting it would
+        inflate op_counts with calls that didn't actually happen."""
+        events = [_event([{"role": "user", "content": "go"}], status=502)]
+        trace = reconstruct_trace_from_events(events)
+        assert trace.records == []
+        assert trace.op_counts() == {}
+
+    def test_a_failed_call_does_not_desync_a_following_retry(self):
+        """The client resends the SAME (unchanged) history after a failure;
+        prev_len must not have advanced past what the retry's request
+        actually contains, or the retry's own messages get mis-scanned."""
+        user_msg = {"role": "user", "content": "go"}
+        events = [
+            _event([user_msg], status=502),  # failed attempt, no history growth
+            _event([user_msg]),  # retry with the identical (unretried) history
+        ]
+        trace = reconstruct_trace_from_events(events)
+        assert trace.op_counts() == {"single_call": 1}  # only the retry actually produced a generation
+
+    def test_a_tool_message_already_present_in_a_failed_calls_request_still_counts(self):
+        """The tool genuinely ran before this attempt was made -- whether the
+        attempt itself then failed doesn't erase that it happened."""
+        user_msg = {"role": "user", "content": "go"}
+        assistant_asks = {"role": "assistant", "content": None, "tool_calls": [{"id": "1"}]}
+        tool_result = {"role": "tool", "tool_call_id": "1", "content": "ok"}
+        events = [
+            _event([user_msg], tool_calls=[{"id": "1"}]),
+            _event([user_msg, assistant_asks, tool_result], status=502),
+        ]
+        trace = reconstruct_trace_from_events(events)
+        assert trace.op_counts() == {"single_call": 1, "tool_call": 1}
+        assert trace.used_expanding
+
+    def test_2xx_response_with_no_choices_is_not_counted_either(self):
+        """A malformed-but-technically-200 response has no real generation
+        in it -- must not be treated as a sample from M just because the
+        status code looked fine."""
+        event = ProxiedCall(
+            request_body={"messages": [{"role": "user", "content": "go"}]},
+            response_body={},  # no "choices" key at all
+            status=200,
+        )
+        trace = reconstruct_trace_from_events([event])
+        assert trace.records == []
+
+
+class TestModelCallProxyFailureHandling:
+    def test_genuinely_unreachable_backend_yields_a_clean_502_not_a_hang_or_crash(self):
+        """No fake/mocked backend here -- point the proxy at a real closed
+        port and confirm the existing URLError path (connection refused)
+        still produces a clean response and a recorded event, not a hang."""
+        p = ModelCallProxy(_free_port(), "http://127.0.0.1:1")  # port 1: nothing listens there
+        p.start()
+        try:
+            status, response = _post_json(
+                f"http://127.0.0.1:{p.listen_port}/v1/chat/completions",
+                {"messages": [{"role": "user", "content": "x"}]},
+                timeout=10.0,
+            )
+            assert status == 502
+            assert "error" in response
+            events = p.events
+            assert len(events) == 1
+            assert events[0].status == 502
+        finally:
+            p.stop()
+
+    def test_arbitrary_backend_exceptions_are_caught_not_propagated(self, proxy, fake_backend, monkeypatch):
+        """Not just HTTPError/URLError -- ANY exception talking to the
+        backend must produce a clean synthesized response and a recorded
+        event, never an unhandled crash that silently drops the call."""
+        real_urlopen = urllib.request.urlopen
+        backend_marker = f":{fake_backend.port}/"
+
+        def flaky_urlopen(req, *args, **kwargs):
+            url = req.full_url if hasattr(req, "full_url") else str(req)
+            if backend_marker in url:
+                raise ValueError("simulated non-URLError backend failure")
+            return real_urlopen(req, *args, **kwargs)
+
+        monkeypatch.setattr(urllib.request, "urlopen", flaky_urlopen)
+
+        status, response = _post_json(
+            f"http://127.0.0.1:{proxy.listen_port}/v1/chat/completions",
+            {"messages": [{"role": "user", "content": "x"}]},
+        )
+        assert status == 502
+        assert "simulated non-URLError backend failure" in response.get("error", "")
+        events = proxy.events
+        assert len(events) == 1
+        assert events[0].status == 502
+
+    def test_status_is_recorded_on_every_event(self, proxy):
+        _post_json(
+            f"http://127.0.0.1:{proxy.listen_port}/v1/chat/completions",
+            {"messages": [{"role": "user", "content": "x"}]},
+        )
+        assert proxy.events[0].status == 200
+
+    def test_error_status_from_backend_is_recorded_not_silently_dropped(self, fake_backend):
+        fake_backend.status = 400
+        fake_backend.response_body = {"error": {"message": "bad request"}}
+        p = ModelCallProxy(_free_port(), f"http://127.0.0.1:{fake_backend.port}")
+        p.start()
+        try:
+            _post_json(f"http://127.0.0.1:{p.listen_port}/v1/chat/completions", {"messages": []})
+            events = p.events
+            assert len(events) == 1
+            assert events[0].status == 400
+        finally:
+            p.stop()
+
+
+class TestModelCallProxyLifecycle:
+    def test_reset_raises_if_a_handler_is_stuck_in_flight(self, proxy):
+        """A silently-corrupted trace (clearing while a straggler could still
+        land) is worse than a loud failure -- prove reset() actually refuses
+        rather than proceeding, using a short timeout so the test is fast."""
+        with proxy._lock:
+            proxy._inflight += 1  # simulate a handler thread mid-request
+        try:
+            with pytest.raises(RuntimeError, match="timed out"):
+                proxy.reset(timeout=0.2)
+        finally:
+            with proxy._lock:
+                proxy._inflight -= 1  # don't leak state into other tests
+
+    def test_reset_succeeds_once_the_simulated_handler_finishes(self, proxy):
+        with proxy._lock:
+            proxy._inflight += 1
+        import threading
+
+        def finish_shortly():
+            import time
+
+            time.sleep(0.05)
+            with proxy._lock:
+                proxy._inflight -= 1
+
+        threading.Thread(target=finish_shortly).start()
+        proxy.reset(timeout=2.0)  # must not raise -- the drain should succeed
+
+    def test_double_start_raises_and_does_not_leak_the_redundant_socket(self, proxy):
+        with pytest.raises(RuntimeError, match="already started"):
+            proxy.start()
+        # the proxy must still be fully usable after the rejected second start
+        status, _ = _post_json(
+            f"http://127.0.0.1:{proxy.listen_port}/v1/chat/completions",
+            {"messages": [{"role": "user", "content": "still works"}]},
+        )
+        assert status == 200
+
+    def test_stop_without_start_does_not_raise(self):
+        p = ModelCallProxy(_free_port(), "http://127.0.0.1:1")
+        p.stop()  # must be a no-op, not an AttributeError on a None server

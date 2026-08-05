@@ -600,13 +600,15 @@ ground truth needs the same scrutiny as vendored data, not less.
 
 ---
 
-## D-12 — recommend `metauto-ai/HGM` over `jennyzzt/dgm`, pending confirmation · **P (research finding, not yet user-confirmed)**
+## D-12 — `metauto-ai/HGM` as primary `S_evo`, `facebookresearch/HyperAgents` as a confirmed second variant, `jennyzzt/dgm` kept as literature baseline only · **C (confirmed by user, 2026-08-04)**
 
 **Researched** (GitHub API metadata + direct source inspection, both repos'
 `README.md`, `coding_agent.py`, `llm.py`, `llm_withtools.py`, top-level file
-listings, `tools/`, `swe_bench/`). Not yet acted on — forking a repo is a
-bigger commitment than most decisions in this log, so this is presented as a
-recommendation for the human to confirm, not a default silently adopted.
+listings, `tools/`, `swe_bench/`), then **confirmed by the user, 2026-08-04**
+(see the update near the end of this entry). Not yet acted on beyond that —
+forking a repo is a bigger commitment than most decisions in this log, and
+the actual fork/clone is real engineering work still to do, not something
+a confirmation completes by itself.
 
 ### What both repos actually are, structurally
 
@@ -776,15 +778,22 @@ touching code is kept in a clearly separate, CC-BY-NC-SA-licensed module
 rather than merged into the rest of `cbs`. Keep `jennyzzt/dgm` available too,
 per the brief's own request for a literature-baseline reference (§5.1).
 
-**Still a recommendation, not a decision** — confirm before forking anything,
-and (a) vs (b) from D-31 needs deciding alongside it once a host is being
-provisioned.
+**Confirmed by the user, 2026-08-04.** Scope going forward: `metauto-ai/HGM`
+is the primary `S_evo`; `facebookresearch/HyperAgents` runs as a second,
+independently-implemented `S_evo` variant (its code kept in its own
+CC-BY-NC-SA-licensed module, never merged into the rest of `cbs`, per the
+license reasoning above); `jennyzzt/dgm` is kept available only as the
+brief's requested literature-baseline reference (§5.1), not run as a third
+`S_evo`. D-31 (option (b), native SWE-bench Verified/Polyglot, not option
+(a)'s task-adaptation layer) was confirmed in the same round. Neither fork
+has actually been cloned into this repo yet — that's real engineering work
+for once a host is re-provisioned (D-37's Lambda instance was terminated),
+not something this confirmation completes on its own.
 
 ---
 
-## D-32 — elaborated preregistration thresholds with full reasoning,
-recommendation still awaiting sign-off · **P (recommendations, not yet
-user-confirmed)**
+## D-32 — preregistration thresholds locked, signed off by the user ·
+**C (confirmed by user, 2026-08-04)**
 
 `docs/preregistration.md` §3's `[TO FIX]` thresholds previously carried a bare
 "proposed X" with no justification. Replaced with full reasoning per
@@ -811,10 +820,18 @@ formatting the same numbers more verbosely:
   made arbitrarily hard to reach, whereas the overfitting gap is a
   *disqualifying* check where the conservative direction is the safe one.
 
-**Not acted on beyond updating the recommendation** — `[TO FIX]` markers stay
-in place in `preregistration.md` until the user actually signs off. These are
-judgment calls about acceptable risk in a scientific claim, which is squarely
-the researcher's call to make, not something to finalize on their behalf.
+**Update — signed off by the user, 2026-08-04.** All ten rows in §3's table
+are now locked in `preregistration.md` (status changed from `[TO FIX]` to
+**locked**, including the two that changed value: `k/K` = 6/10, "large"
+overfitting gap = 0.2; the rest kept their original recommended values with
+fuller reasoning attached). Per this project's own preregistration
+discipline (§0 of `preregistration.md`), **these values must not be revisited
+after seeing any real Phase 4/5 results** — that is the entire point of
+fixing them now, while genuinely blind to outcomes. `preregistration.md` §4
+(models and task families) remains open, but that is unbuilt engineering
+work (the SWE-bench Verified/Polyglot integration, now scoped concretely by
+D-31's confirmation), not an undecided judgment call — the two are
+deliberately kept distinct in the file so "done" isn't overclaimed.
 
 ---
 
@@ -1103,19 +1120,88 @@ performance deltas without isolating the base model's independent ceiling;
 every elicitation-gap paper found studies static scaffolds, not an evolving
 one. That gap looks real, not assumed.
 
-**Caveats, stated plainly rather than buried:**
-- This is 7 papers via search + abstract/full-text pass, not a systematic
+**Caveats, stated plainly rather than buried (original pass):**
+- This was 7 papers via search + abstract/full-text pass, not a systematic
   citation-graph search (no Semantic Scholar backward/forward citation check
   on DGM/HGM/SICA, no direct search of NeurIPS/ICML/ICLR 2026 accepted-papers
   lists, no check of the METR/Apollo elicitation literature's full text).
 - Full PDF text extraction failed for two papers (RQGM, and the initial
   attempt on SICA) via direct `WebFetch`; the ar5iv HTML mirror worked and
   should be preferred over raw arXiv PDF links for any future check like this.
-- A real NeurIPS-quality related-work section needs this redone properly
-  (full citation-graph pass, full text of the METR/Apollo elicitation-gap
-  literature, a check of very recent — post-cutoff — submissions) before
-  submission, not just before committing to infra spend. Treat this entry as
-  "confidence materially improved, not "cleared."
+
+**Update — proper citation-graph pass done (Semantic Scholar API, not
+keyword search), plus full-text read of METR/Apollo, per the caveats
+above.** Full write-up now lives in
+`docs/self-improving-agents-proposal.md` §10 rather than duplicated here;
+summary of what changed:
+
+- Pulled the actual citing-paper lists for DGM (arXiv:2505.22954, 100
+  results), HGM (arXiv:2510.21614, 21 results), and SICA (arXiv:2504.15228,
+  33 results) directly from Semantic Scholar's API — a structurally
+  different, more complete method than keyword search, and it found
+  something keyword search had missed entirely.
+- **The most substantive find of either pass**: a 3-paper preregistered
+  cluster (İşcan et al. — arXiv 2607.26117, 2606.31511, 2607.12962) doing
+  placebo-controlled decomposition of execution-feedback self-repair vs.
+  blind resampling in frozen small code models (0.5B-7B), with real
+  statistical rigor (Holm-corrected McNemar tests, a priori power analysis,
+  hashed seed namespaces). Read in full, not abstracts. Their finding:
+  feedback's value over a content-free placebo is statistically
+  indistinguishable from zero at these scales. This is the closest any
+  paper found has come to this project's actual RQ2/RQ3 comparison — but it
+  studies a **fixed, static retry loop** (one paper explicitly cites DGM and
+  frames itself as *contrasting* with "the broader agenda of agents that
+  learn from their own histories" — the authors' own scoping, not an
+  inference), and **has no frontier-estimation or frontier-crossing
+  concept** (their "dead" unit is zero-passes-in-8-cached-samples, explicitly
+  caveated as not a claim about the true model distribution). Both gaps are
+  exactly where this project's contribution sits. Genuinely useful beyond
+  novelty-clearing too: their result is a strong prior for what to expect
+  from this project's own `S_star` (if execution feedback shows ~no gain
+  there either, that corroborates rather than surprises), making a genuine
+  `S_evo` crossing via a support-expanding operation a fixed retry loop never
+  had access to a materially sharper contrast to draw in the write-up.
+- METR (arXiv 2503.14499) and Apollo Research (arXiv 2502.15850) now read
+  in full: confirmed neither has a formal elicitation-vs-expansion
+  framework or frontier-crossing concept — METR's "elicitation" is a
+  scaffold-selection step, not a decomposed, measured quantity; its CIs
+  bound the trend slope, not any individual capability estimate. Strong
+  citable grounding for the general framing, not a competing methodology.
+- New "still open" item this pass surfaced rather than closed: a forward-
+  citation check on the İşcan cluster itself (it's recent enough — mid-2026 —
+  that little has had time to cite it yet, but that will change), and a
+  check of whatever's been posted since this pass was run.
+
+**Update — forward-citation check on the İşcan cluster done** (Semantic
+Scholar API, one query per arXiv ID: 2607.26117, 2606.31511, 2607.12962).
+Two of the three papers have zero forward citations as of this check.
+The third (2606.31511) has exactly one: a survey, "Recursive
+Self-Improvement in AI: From Bounded Self-Refinement to Autonomous
+Research Loops" (arXiv 2607.07663, Chen/Wang/Qu), which taxonomizes 1,250
+self-improvement papers (2024-2026) along two axes (what's improved;
+degree of loop closure) rather than reporting new experiments. Read its
+full text (ar5iv HTML, not just the abstract) specifically checking
+whether it already stakes out this project's intersection: it names DGM
+explicitly as an example of open-ended RSI ("maintaining an open-ended
+archive of self-modifications validated against coding benchmarks") and
+separately discusses elicitation as amplifying latent capability rather
+than creating it, citing the same general elicitation-gap literature this
+project already leans on — but it never combines the two into a measured
+claim. No mention of "frontier crossing," "capability frontier," or any
+empirical test of whether a DGM-style evolving scaffold's gains survive
+against the base model's own ceiling; it's explicitly a taxonomy/survey,
+not an empirical instrument. Net effect: the forward-citation check
+surfaces one paper that confirms this project's two building blocks (DGM,
+elicitation-gap framing) are both on other researchers' radar as of
+mid-2026, but nobody has yet joined them into this project's actual
+question. Gap still holds; nothing here narrows it.
+
+**A real NeurIPS-quality related-work section still needs one more pass
+before submission** (systematic recency check closer to submission date —
+forward citations checked now, but this field moves fast enough that a
+paper posted the week before submission could still land in the gap).
+Treat this entry as "confidence materially improved three times now, not
+cleared" — same discipline as before, not a license to stop checking.
 
 ---
 
@@ -1286,6 +1372,68 @@ call in `hgm_utils.eval_agent`) directly and reconstruct one `OperationTrace`
 per task afterward, rather than slotting an HGM agent into the existing
 `AgentFunction` shape unchanged.
 
+**Update, 2026-08-05 — instance re-provisioned after the user terminated the
+original one; confirms the persistent-filesystem/local-disk split worked
+exactly as documented, plus one new real setup gotcha on the fresh instance.**
+New Lambda instance, same region-appropriate A10 GPU. Re-verified in order:
+SSH access, `nvidia-smi` (A10 present, idle), Docker (same `permission
+denied` on `docker.sock` as the *first* instance — `ubuntu` not yet in the
+`docker` group on a fresh instance either; `sudo usermod -aG docker ubuntu`
+fixes it every time, evidently not something Lambda Stack images do by
+default), then `docker run --gpus all` (works). The persistent filesystem
+(`/lambda/nfs/cbs-project`) reattached with everything from the prior
+session intact — `hgm/` (network_mode="host" patches still in place,
+confirmed via `.orig` backups sitting next to the patched files), `hgm_venv/`
+(Python 3.10.12, vLLM 0.26.0), `cbs_pkg` — exactly as D-37's original
+"local disk does not survive termination; the persistent filesystem does"
+claim predicted. Docker's own image store, being local-disk state, was
+correctly gone (`docker images` showed nothing but `hello-world` after a
+fresh pull) — expected, not a problem, since HGM rebuilds its per-task agent
+image on demand anyway.
+
+**New gotcha, not seen on the first instance (or not noticed there — unclear
+which):** relaunching vLLM failed with `FileNotFoundError: [Errno 2] No such
+file or directory: 'ninja'` during KV-cache initialization (a JIT-compile
+step vLLM's engine core runs internally). `ninja` **was** installed — `pip
+show ninja` in `hgm_venv` confirmed 1.13.0, and the executable existed at
+`hgm_venv/bin/ninja` — but that directory was never on `PATH`, because vLLM
+was launched by calling `hgm_venv/bin/python -m vllm...` directly rather
+than through an activated venv (`source hgm_venv/bin/activate`), and the
+engine-core subprocess that shells out to `ninja` by bare name inherits the
+system `PATH`, not the venv's. Fixed by prepending
+`PATH=/lambda/nfs/cbs-project/hgm_venv/bin:$PATH` to the launch command
+itself rather than relying on venv activation semantics that don't survive
+into a subprocess tree spawned via SSH. Worth remembering for any future
+re-provisioning: **never assume a venv's own console-script executables are
+on `PATH` just because its `python` binary was invoked directly** — this
+class of bug is invisible until something inside the process tree shells
+out to a bare command name rather than importing a Python module.
+
+**A second new gotcha, this one specific to reusing the persistent
+filesystem for a task that was already run before termination:** re-running
+`hgm_run_task_with_interception.py` against `python__dominoes` (already
+tested in the prior session) failed at the Docker image-build step with
+`PermissionError: [Errno 13] Permission denied` on paths under
+`hgm/logs/build_images/instances/pb.eval.x86_64.python__dominoes__latest/…`
+— specifically on copied `.git/objects/…` files carrying git's normal
+read-only mode (`-r--r--r--`) from the prior session, dated before
+termination. The image-build step tries to overwrite files at those same
+paths on a rebuild, and overwriting a read-only file via a plain open-for-
+write fails regardless of directory permissions (removing and recreating it
+would not). Confirmed by checking the actual file mode
+(`-r--r--r-- 1 ubuntu ubuntu … .git/objects/d7/1e6a80…`), not just inferred
+from the error text. **Only affects re-running a task that was already
+built once before an instance termination** — a fresh task (`python__two-
+bucket`, never run before) built and ran cleanly on the same instance.
+Fixed by deleting the stale `hgm/logs/build_images/instances/` directory
+tree entirely (disposable build-log/context scratch space, not source data
+or results — confirmed by reading what actually lives there before
+deleting anything) and re-running; `python__dominoes` then completed
+cleanly with the expected single support-preserving call, matching every
+other real attempt so far. Worth remembering for any future re-provisioning
+that repeats a previously-tested task: **clear `hgm/logs/build_images/
+instances/` first**, or expect this exact permission error.
+
 ---
 
 ## D-38 — `cbs.scaffolds.fork_bridge`: network-layer interception for HGM,
@@ -1432,25 +1580,232 @@ no running containers, disk at 6% of 1.4TB), but it's worth a
 `docker system prune` + log cleanup pass before the instance is handed to
 the next session.
 
+**Second review round found and fixed two real critical bugs, not just style
+issues.** A four-dimension review (correctness / concurrency-and-resource-
+safety / test-quality / integration-consistency), each finding independently
+re-verified by a separate skeptic pass before being trusted, raised 34
+findings; 30 confirmed, 3 overstated, 1 refuted. Two were rated critical and
+both were real:
+
+1. **`reset()`/`stop()` didn't wait for in-flight handler threads.** A
+   straggling response to task N's last call — mid-flight between "backend
+   responded" and "recorded" — could land in task N+1's event log after
+   `reset()` had already run, silently contaminating the wrong task's trace.
+   This directly violates the "one task at a time" serialization the whole
+   design depends on (see above). **Fixed:** an in-flight counter
+   (`_inflight`, guarded by the same lock as `_events`) that `reset()` now
+   waits to hit zero before clearing, raising loudly (not proceeding
+   silently) if a handler is stuck past a timeout — a corrupted trace should
+   never pass quietly.
+2. **`urlopen`'s exception handling only covered `HTTPError`/`URLError`.**
+   A backend that was merely slow past the timeout, or that reset the
+   connection mid-response, could raise other exception types that
+   propagated uncaught — silently dropping that call from `.events` entirely,
+   with no trace it was ever attempted. **Fixed:** widened to catch any
+   exception during the backend call, always producing a synthesized error
+   response rather than a silent gap.
+
+A third, moderate-severity issue compounds with both: failed/errored calls
+(from either bug above, or a genuine backend error) were being recorded and
+reconstructed exactly like a successful generation, inflating `single_call`
+counts with calls that never actually sampled from `M`. **Fixed:**
+`ProxiedCall` now carries the HTTP `status`, and `reconstruct_trace_from_events`
+only counts a `single_call` (and only advances its message-count bookkeeping)
+for a genuine 2xx response with a real `choices[0].message` — a failed
+attempt's message-history growth is correctly not double-counted on retry,
+while any tool-role message already present in a failed attempt's *request*
+is still correctly scanned (the tool genuinely ran regardless of whether that
+follow-up generation then failed). Also fixed: no read timeout on the
+client-facing socket (a stalled client could block a handler thread forever,
+compounding with bug #1 above), and the `start()` double-start guard being a
+check-then-act race without a lock (rewritten to build the server object
+outside the lock, then atomically check-and-set, closing the redundant
+socket if it lost the race).
+
+12 new tests added covering all of the above (`tests/test_fork_bridge.py`,
+now 26 tests total) — including a genuinely unreachable backend (not
+mocked), a monkeypatched arbitrary exception to prove the broadened catch
+actually works and not just `URLError`, a simulated stuck in-flight handler
+to prove `reset()` actually raises rather than a hypothetical, and the
+retry-after-failure sequencing. Full suite re-run 8 times consecutively with
+no flakiness before trusting the concurrency-related fixes. Deployed to the
+remote instance's copy and its import verified there, not just locally.
+
+**Explicitly not fixed, by engineering judgment given this module's actual
+deployment context (a single-user research instance, sequential one-task-
+at-a-time usage, no adversarial network exposure, no streaming used by this
+fork):** binding `0.0.0.0` instead of loopback; not forwarding arbitrary
+request headers (e.g. `Authorization`) to the backend; the undocumented
+assumption that responses are never SSE-streamed; a few redundant/weak test
+assertions the review flagged as style issues. None of these affect the
+correctness of any measurement this instrument produces; revisit if this
+module is ever reused somewhere with a different threat model.
+
+**Update, 2026-08-05 — the one remaining validation gap is closed: a real
+tool-call round trip observed and correctly classified.** Every real attempt
+before this (9 across two sessions/instances) showed the baseline agent
+making one plain generation and stopping — plausible real 7B-model behavior
+under `tool_choice="auto"`, but it meant `reconstruct_trace_from_events`'s
+`tool_call`/support-expanding path had only ever been exercised against
+synthetic conversations, never a real one. Rather than keep sampling
+randomly and hoping, forced the issue directly: made an **isolated copy** of
+the frozen agent variant (`hgm/toolcheck_agent_src/`, copied from
+`measured_default_agent/src/`, never the canonical copy itself) and changed
+`llm_withtools.py`'s two hardcoded `tool_choice="auto"` call sites to
+`tool_choice="required"` — a deliberate, clearly-scoped validation
+modification, not a change to any measurement pipeline or real experimental
+data; kept in its own directory specifically so it can't be confused with
+the real frozen baseline later.
+
+Ran against `python__bowling` (a fresh task). Result: a real, substantive
+64-round tool-using trajectory — `n_ops: 128` (64 `single_call` + 64
+paired `tool_call`), `used_expanding: true`, `classes_used:
+["support-expanding", "support-preserving"]`, `expanding_ops: ["tool_call"]`
+— every field the crossing-determination logic (`cbs.crossing`) actually
+reads, populated by a real model for the first time, not a hand-authored
+test fixture. The produced patch was genuine, substantive code (a full
+`BowlingGame` implementation, not a stub), passing the large majority of
+the hidden test suite and failing exactly one edge case (a specific
+exception-raising condition) — `eval_result: "unresolved"`, not
+`"empty_patch"` like every prior real run, confirming this wasn't a
+degenerate or garbled trajectory. `n_proxy_events: 68` vs. 64
+`single_call` ops in the final trace is a small, plausible gap (a few
+raw proxy events likely failed/errored and were correctly excluded by the
+status-aware trace reconstruction from the second review round above,
+consistent with what that fix is *for* — not independently confirmed
+call-by-call, but consistent with everything else observed).
+
+**This validates the classification logic end-to-end against real data for
+the first time**, not just a bigger sample size — `used_expanding: true` had
+never been produced by a real run before this, meaning `cbs.crossing`'s
+core support-expanding-ablation branch had literally never been exercised
+outside synthetic tests until now. The forced-`tool_choice` trial is
+**validation-only and must not be conflated with real measurement data** —
+`S0`/`S_star`/`S_evo` all need `tool_choice="auto"` (or whatever the fork's
+own default is) to measure genuine, unforced agent behavior; this trial
+exists purely to prove the instrument reads a real tool-call trajectory
+correctly when one occurs; it says nothing about how often Qwen2.5-Coder-7B
+would choose to use a tool unprompted on its own, which remains an open,
+unresolved question about baseline agent behavior under this model — not
+something this trial was designed to answer, and not something to mistake
+it for having answered.
+
+---
+
+## D-39 — HyperAgents integration cost, checked against real source now that
+D-12 is confirmed: one real patch needed (not zero), Docker networking
+already solved (unlike HGM) · **P**
+
+D-12's confirmation was signed off before either fork was actually cloned
+into anything — the comparison table's "same lineage" framing for
+`HyperAgents` was accurate at the structural level (task/meta-agent split,
+same DGM ancestry) but hadn't been checked at the code level the way HGM
+was in D-37. With no host available, shallow-cloned both `metauto-ai/HGM`
+and `facebookresearch/HyperAgents` locally (`git ls-remote`/`git clone
+--depth 1` both work fine from this machine — no Docker, but plain GitHub
+access is not blocked) to check that assumption before it turns into a
+surprise once a host exists again. It only holds partially.
+
+**Model-call chokepoint: still singular, as assumed.** Both `task_agent.py`
+and `meta_agent.py` route every LLM call through
+`agent/llm_withtools.py` → `agent/llm.py:get_response_from_llm` — same
+shape as HGM's `llm.py:get_response_from_llm`. `fork_bridge.py`'s
+network-layer `ModelCallProxy` approach (D-38) intercepts at the HTTP layer,
+not by patching this function, so this should still work unmodified in
+principle for HyperAgents too, provided the outbound call is a plain HTTP
+request the proxy can sit in front of (see below — it is, via `litellm`).
+
+**Local-endpoint patch: HyperAgents needs one; HGM, corrected in D-37,
+needs none.** HGM's `create_client` already has a native
+`elif "vllm" in model.lower()` branch. HyperAgents' `get_response_from_llm`
+is a **different implementation**, not shared code — it calls
+`litellm.completion(model=model, messages=..., ...)` with no `api_base`
+handling anywhere and no vLLM-aware branch at all; `litellm` dispatches
+purely off the `model` string's provider prefix (`openai/`, `anthropic/`,
+`gemini/`, etc.). Pointing this at a local vLLM server needs a small, real
+patch — passing `api_base=<url>` and a `hosted_vllm/<model>`-style prefix
+into `completion_kwargs` when a designated local-model string is used
+(litellm's own documented mechanism for self-hosted OpenAI-compatible
+servers). Estimated at roughly the same size as the patch D-12 originally
+(and wrongly) estimated for HGM before finding HGM didn't need it — on the
+order of 10-20 lines, not a redesign, but a real cost this project should
+not assume away for the second `S_evo` variant just because it didn't apply
+to the first.
+
+**Docker networking: already solved in HyperAgents, unlike HGM.** D-37's
+real bug — containers on Docker's default bridge network can't reach the
+host's `localhost`, requiring `network_mode="host"` patched into two call
+sites — does **not** need to be re-fixed here.
+`HyperAgents/utils/docker_utils.py` already sets `network_mode="host"` (both
+in its `client.containers.run(**run_kwargs)` path and a `--network=host` CLI
+path) as its own default. One less real fix needed for this fork, a genuine
+cost *reduction* relative to HGM, not just a wash against the litellm patch
+above.
+
+**A loose end worth flagging, not yet resolved either way**: HGM's own
+`swe_bench/harness.py:harness()` loads the plain `princeton-nlp/SWE-bench`
+dataset and filters by `instance_id`, while `hgm_utils.py:sample_child`
+(used during actual self-improvement) loads `princeton-nlp/SWE-bench_Verified`
+directly — two different dataset objects feeding the same pipeline.
+`evaluate_agent.py --split Verified` resolves this by pre-filtering
+`test_task_list` to Verified's instance IDs before either path runs, and
+since Verified is a curated subset of the same underlying instances (not a
+separately-authored dataset), filtering the full dataset by Verified's IDs
+should yield equivalent problem statements — but this has not been verified
+empirically the way every other family's data has been in this project
+(D-27/D-34/D-35's standing discipline). When `cbs`'s own SWE-bench Verified
+wrapper for `S0`/`S_star` is actually built, it should load
+`princeton-nlp/SWE-bench_Verified` directly rather than replicate HGM's
+two-dataset indirection, and the equivalence claim above should be spot-
+checked against a few real instances rather than assumed.
+
+**Also confirmed while in there**: the actual grading step (resolved vs.
+unresolved) is not inside `swe_bench/harness.py` at all — `harness()` only
+produces a candidate `model_patch` per instance. Grading happens in
+`swe_bench/report.py:make_report` → `run_evals`, which shells out to
+`swe_bench/SWE-bench/swebench/harness/run_evaluation.py` (the official,
+vendored SWE-bench package's own evaluation harness, applying the patch and
+running the real test suite in a per-instance Docker image). This is a more
+precise call chain than D-31's original "every verification funnels through
+`hgm_utils.eval_agent` → `swe_bench.harness.harness(...)`" — that framing
+undercounted a step. Doesn't change D-31's conclusion (reuse the harness
+rather than reimplement), but the `cbs` wrapper should call `make_report`/
+`run_evals`, not just `harness()`, to get an actual resolved/unresolved
+verdict, not just a produced patch.
+
+**Net effect on D-12/D-31: no change to the recommendation, a refinement to
+its cost estimate.** HGM still costs nothing extra to point at a local
+model; HyperAgents costs one small real patch but saves the Docker-network
+fix HGM needed; both still fit `fork_bridge.py`'s existing interception
+design without redesigning it. None of this has been tested — there is no
+Docker on this machine to run either fork's container path — so this is
+source-verified but execution-unverified, same epistemic status as D-12's
+original scoping before D-37 actually ran anything for real. Flagging that
+distinction explicitly rather than letting "read the source" quietly read
+as "confirmed working."
+
 ---
 
 ## Still open
 
 | # | Decision | Status | Needed by |
 |---|---|---|---|
-| D-12 | Primary `S_evo` fork — **researched three-way (DGM/HGM/HyperAgents), `metauto-ai/HGM` recommended as primary, `facebookresearch/HyperAgents` recommended as a second variant if running two** (full comparison and the CC-BY-NC-SA license caveat above), awaiting confirmation | **D** | Phase 4 execution |
-| D-13 | LiveCodeBench (investigated, real scope now known — needs sandbox stdin support + a new I/O-judge verification path, not just a loader; D-33) and SWE-bench Verified remain open. HumanEval→HumanEval+ (D-34) and MBPP→MBPP+ (D-35) are **done**. **note:** whichever fork is chosen likely makes SWE-bench Verified load-bearing, not optional (D-12) | **D** | before real capability claims |
-| D-31 | Option (a) (adapt `cbs` tasks to the fork) vs. option (b) (native SWE-bench Verified/Polyglot) — **now concretely scoped by reading HGM's actual source (see write-up above); (b) recommended, and turns out cheaper than (a), not more expensive** | **D** | Phase 4 execution, alongside D-12 |
-| D-14 | Exact `N_max`, the `k`/`K` reliability threshold, and the interpretation matrix's three placement thresholds — **fully-reasoned recommendations now in `preregistration.md` §3 (D-32), awaiting sign-off**, not bare placeholders | **D** | before Phase 5 |
+| D-12 | ~~Primary `S_evo` fork~~ — **confirmed by user, 2026-08-04**: `metauto-ai/HGM` primary, `facebookresearch/HyperAgents` as a second independent variant (own CC-BY-NC-SA module), `jennyzzt/dgm` kept only as literature baseline. Not yet cloned/forked — real engineering work, next once a host exists | **C** | Phase 4 execution |
+| D-13 | LiveCodeBench (investigated, real scope now known — needs sandbox stdin support + a new I/O-judge verification path, not just a loader; D-33) remains out of scope. SWE-bench Verified is now **load-bearing, confirmed** (D-12/D-31) rather than optional. HumanEval→HumanEval+ (D-34) and MBPP→MBPP+ (D-35) are **done** | **D** | before real capability claims |
+| D-31 | ~~Option (a) vs (b) for task integration~~ — **confirmed by user, 2026-08-04**: option (b), native SWE-bench Verified/Polyglot, not (a)'s task-adaptation layer. Wrapper around HGM's own `swe_bench/harness.py` for `S0`/`S_star` still needs building | **C** | Phase 4 execution, alongside D-12 |
+| D-14 | ~~Exact `N_max`, the `k`/`K` reliability threshold, and the interpretation matrix's three placement thresholds~~ — **signed off by user, 2026-08-04** (D-32); all ten rows in `preregistration.md` §3 now marked **locked**, not `[TO FIX]`. Must not be revisited after seeing results | **C** | before Phase 5 |
 | D-15 | Whether to add a third model family | **D** | Phase 3 (done otherwise) |
 | D-16 | Per-phase budget caps in dollars / GPU-hours | **D** | before first paid run |
 | D-17 | ~~Which reasoning set is the transfer family~~ — resolved: `transfer_reasoning`, D-30 | **C** | — |
 | D-23 | ~~Provision a Linux host with both GPU and Docker~~ — **resolved, D-37**: Lambda Labs A10 instance, Docker+GPU+vLLM confirmed working, Phase 0 DoD met for real | **C** | — |
-| D-36 | Novelty check against current literature (partial pass done, see write-up) — needs a full citation-graph pass + METR/Apollo elicitation-literature full-text read before submission | **D** | before submission, ideally before large infra spend |
+| D-36 | Novelty check against current literature — citation-graph pass (DGM/HGM/SICA), full METR/Apollo read, and forward-citation check on the İşcan cluster all **done**; gap holds as of this check. **Only remaining piece: one more recency sweep close to the actual submission date** | **D** | before submission, ideally before large infra spend |
 | D-37 | Root-cause the `TS_sample` argmax-on-empty crash against the real 60-task subset (not yet reproduced at real scale — only hit under a deliberately shrunk 1-task test) | **D** | before any measured `S_evo` run |
-| D-38 | Validate `tool_call` classification against a real tool-invoking episode — not yet observed in 7 real attempts (D-38); consider `tool_choice="required"` or a task more likely to need iteration, as a targeted way to get one rather than continuing to sample randomly | **D** | before any measured `S_evo` run |
+| D-38 | ~~Validate `tool_call` classification against a real tool-invoking episode~~ — **resolved, 2026-08-05**: forced `tool_choice="required"` in an isolated (non-canonical) agent copy, observed a real 64-round tool-using trajectory, correctly classified end-to-end (`used_expanding: true` produced by a real run for the first time). Separately, whether the baseline agent invokes tools *unprompted* under normal `tool_choice="auto"` remains open — 9/9 unforced real attempts still show none | **C** | — |
+| D-39 | Write and test the small (~10-20 line) `litellm`-based local-endpoint patch HyperAgents' `agent/llm.py` actually needs (source-verified, not yet execution-verified — no Docker on this machine); build `cbs`'s own SWE-bench Verified wrapper calling `make_report`/`run_evals`, not just `harness()`, per the corrected call chain above | **D** | Phase 4 execution, alongside D-12/D-31 |
 
-D-14 in particular must be fixed in `preregistration.md` **before** the full run,
-not after seeing results. D-23 is resolved (D-37) — the practical blocker on
-actually *running* Phase 4/5 is now the measurement-layer bridge itself, not
-infrastructure.
+D-14 is now locked in `preregistration.md` and must not be revisited after
+seeing results. D-23 is resolved (D-37); D-12/D-31 are confirmed but not yet
+built. The practical blocker on actually *running* Phase 4/5 is now real
+engineering work (forking HGM+HyperAgents, building the SWE-bench Verified/
+Polyglot wrapper) plus re-provisioning a host, not any remaining open
+decision.

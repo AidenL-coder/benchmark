@@ -221,13 +221,75 @@ citation-graph review, and should be redone properly before submission):**
   the elicitation-gap framing and preregistration discipline this proposal
   already uses are the current bar in this space, not overkill. Its scaffolds
   are static, never evolving — the structural difference from RQ1/RQ2 here.
-- **METR / Apollo Research's elicitation-gap and time-horizon work** —
-  established the "elicitation is a lower bound on capability" framing and
-  best-of-N-style measurement this proposal's frontier estimator extends into
-  the self-improvement setting. Strong citable grounding for *why* the
-  statistical machinery (§5.4's Clopper-Pearson/Good-Turing/Chao1) is the
-  right tool, not a competing claim — full text not yet read, flagged in
-  D-36 as a remaining gap before submission.
+- **METR's time-horizon methodology** (arXiv 2503.14499) and **Apollo
+  Research's forecasting work** (arXiv 2502.15850) — read in full, not just
+  abstracts. Neither has a formal elicitation-vs-expansion framework: METR's
+  "elicitation" is a pragmatic scaffold-selection step (pick a good scaffold,
+  tune it, move on), not a measured, decomposed quantity, and its confidence
+  intervals bound the *trend*'s slope, not any individual capability
+  estimate's floor/ceiling. Apollo's "elicitation level" is a coarse
+  low/high input variable to a forecasting model, not a mechanism decomposed
+  into what specifically drives it. Both are strong citable grounding for
+  *why* this space cares about elicitation at all and for the "measured
+  capability is a lower bound" framing generally — but neither is a
+  methodological competitor: neither studies an evolving scaffold, neither
+  has a frontier-crossing concept, and neither attributes gains to specific
+  operations.
+- **A closely-related, genuinely important find from a proper citation-graph
+  pass (not caught by the earlier keyword-search-only check) — a 3-paper
+  cluster by İşcan et al., all frozen small code models, all preregistered:**
+  "Try Again, Don't Look Back" (arXiv 2607.26117), "Falsification, Not
+  Exposure" (arXiv 2606.31511), and "Form, Not Content?" (arXiv 2607.12962).
+  These run exactly the comparison this proposal's own `example_agents.py`
+  validates against synthetic data (`blind_best_of_n_agent` vs
+  `feedback_repair_agent`) — blind resampling vs. execution-feedback-
+  conditioned self-repair — at real scale (0.5B-7B), with real preregistration
+  (Holm-corrected McNemar tests, a priori power analysis, hashed seed
+  namespaces, placebo-controlled arms that ablate task-relevant content while
+  keeping the scaffold's *form* identical). Their finding: blind resampling
+  ties or beats execution feedback at these scales — feedback's measured
+  value over a content-free placebo is statistically indistinguishable from
+  zero. Read in full, not just abstracts, specifically to check whether this
+  closes the gap this proposal targets. It does not, for two confirmed
+  reasons: (1) **all three use a fixed, static retry loop** — the model's
+  weights and the scaffold's structure are both frozen across attempts; one
+  paper explicitly cites Darwin Gödel Machine and frames its own work as
+  deliberately *contrasting* with "the broader agenda of agents that learn
+  from their own histories," i.e. the authors themselves scope this as
+  static-scaffold work, not evolving-scaffold work; (2) **none has a formal
+  frontier-estimation or frontier-crossing concept** — their "dead" (unsolved)
+  task-cell unit is defined operationally as zero passes in a small cached
+  pool (N=8), explicitly caveated in one paper as making "no direct claim
+  about latent sampling capacity, model distribution, or general
+  program-synthesis ability" — exactly the gap this proposal's Clopper-Pearson/
+  Good-Turing/Chao1 frontier estimator is built to close rigorously instead of
+  leave caveated. Genuinely useful for this proposal in two ways beyond
+  citation: their finding (feedback ≈ placebo in *fixed* scaffolds at these
+  scales) is a strong prior that if this proposal's own `S_star` shows no
+  gain from execution feedback either, that would corroborate rather than
+  surprise — and if `S_evo`'s *evolved* scaffold does cross the frontier via
+  a support-expanding operation a fixed retry loop never had access to (tool
+  use, decomposition, retrieval), that is a materially more interesting
+  contrast to draw explicitly in the eventual write-up than either result
+  alone.
+- **Forward-citation check on the İşcan cluster itself, done** (Semantic
+  Scholar API, one query per arXiv ID). Two of the three papers have zero
+  citing papers yet. The third (arXiv 2606.31511, "Falsification, Not
+  Exposure") has exactly one: a survey, "Recursive Self-Improvement in AI:
+  From Bounded Self-Refinement to Autonomous Research Loops" (arXiv
+  2607.07663), taxonomizing 1,250 self-improvement papers (2024-2026) along
+  what's-improved and degree-of-loop-closure axes — a survey, not new
+  experiments. Read in full (not just the abstract) specifically to check
+  whether it already joins this proposal's two building blocks: it names
+  the Darwin Gödel Machine explicitly as an instance of open-ended RSI
+  ("maintaining an open-ended archive of self-modifications validated
+  against coding benchmarks") and separately discusses elicitation as
+  amplifying latent capability rather than creating it — but never
+  combines the two into a measured claim, and never uses the words
+  "frontier crossing" or "capability frontier" in any form. Confirms both
+  of this proposal's building blocks (DGM, the elicitation-gap framing) are
+  independently on other researchers' radar as of mid-2026, but nobody has
+  yet joined them the way this proposal does. Gap still holds.
 - Checked and set aside as lower-overlap: **The Red Queen Gödel Machine**
   (arXiv 2606.26294 — co-evolves the *evaluator*, a different question),
   **Meta-Agent Challenge** (arXiv 2606.04455 — benchmarks meta-agents
@@ -236,17 +298,33 @@ citation-graph review, and should be redone properly before submission):**
   evolution in long-horizon games), **SIA** (arXiv 2605.27276 — updates model
   weights *and* harness, outside this proposal's frozen-`M` premise but a
   useful citation for why keeping `M` frozen is necessary for clean
-  attribution).
+  attribution), and a **PACE / anytime-valid acceptance-testing line**
+  (arXiv 2606.08106, 2607.00871) on the statistics of *committing* a change
+  during self-evolution (avoiding the evolutionary loop "p-hacking itself")
+  — a different question (accept/reject one step of evolution) from this
+  proposal's (did the whole trajectory cross the frontier), but a relevant
+  citation for the shared discipline of rigorous statistics in this space.
 
 **The gap this fills:** no current work isolates whether frozen-model
 self-improving agents cross a rigorously estimated capability frontier, nor
 decomposes any gain into expansion vs. elicitation vs. overfitting, nor ties
 crossings to an inspectable support-preserving/expanding partition. That gap
 held up under a first novelty check against the current 2025-2026 wave (SICA
-and Hyperagents came closest and both fall short of it on inspection) but
-that check should be redone as a proper citation-graph search before
-submission, not trusted as final. The instrument itself — reusable across
-future self-improving systems — is a contribution independent of which
+and Hyperagents came closest and both fall short of it on inspection), and
+held up further under a proper citation-graph pass (via the Semantic Scholar
+API against DGM/HGM/SICA's actual citing papers, not just keyword search) —
+the closest work found, the İşcan preregistered self-repair cluster above,
+studies the right *comparison* (feedback vs. resampling) with real rigor, but
+on a fixed scaffold and without a frontier-crossing concept, which is exactly
+where this proposal's contribution sits instead. A forward-citation check on
+that cluster itself turned up one survey (arXiv 2607.07663) that independently
+name-checks both DGM and the elicitation-gap framing this proposal relies on,
+but never joins them into a measured claim — consistent with, not a
+challenge to, the gap this proposal targets. Still not to be trusted as final
+without one more pass closer to the actual submission date, since this field
+moves fast enough that a paper posted the week before could still land in the
+gap. The instrument itself — reusable across future self-improving
+systems — is a contribution independent of which
 hypothesis wins.
 
 ---
@@ -273,4 +351,4 @@ The study is deliberately small-scale, uses frozen models, runs all self-modifyi
 
 ---
 
-*Draft v1 — intended as a working document to hand to a mentor and iterate on. Open questions to resolve next: final `S_evo` fork choice (`docs/DECISIONS.md` D-12 — HGM recommended as primary, HyperAgents as a second variant, pending confirmation), exact `N_max`/task-count budget (D-14/D-32, thresholds proposed and reasoned, pending sign-off), and whether to add a third model family (D-15). A first novelty pass against the current literature is in §10/D-36 — redo it properly (full citation-graph search, full METR/Apollo text) before submission.*
+*Draft v1 — intended as a working document to hand to a mentor and iterate on. `S_evo` fork choice (D-12: HGM primary, HyperAgents as a second variant, DGM as literature baseline only) and preregistration thresholds (D-14/D-32) are both confirmed/locked as of 2026-08-04 — only whether to add a third model family (D-15) remains an open question. A citation-graph novelty pass against the current literature, including a forward-citation check on the closest cluster found, is in §10/D-36 — one more recency sweep is still needed closer to actual submission.*

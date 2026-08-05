@@ -2,14 +2,16 @@
 
 Read this first. It's the fast on-ramp — what this project is, what exists,
 what's actually been verified vs. assumed, what's blocked, and where to look
-for more depth. Last commit is `7000dc4`, but there is substantial
-**uncommitted** work on top of it as of this writing: `docs/DECISIONS.md`
-and this file both modified, plus three new untracked files —
-`src/cbs/scaffolds/fork_bridge.py`, `tests/test_fork_bridge.py` (368 tests
-now passing locally, up from 354), and `scripts/hgm_run_task_with_interception.py`.
-Nothing from this session has been committed yet — check `git status`
-before assuming otherwise. If code and this file disagree, trust the code
-and `git log` — update this file when that happens.
+for more depth. Last commit is `74be8f9` (message `f` — a checkpoint commit,
+not a normal descriptive one; the fork_bridge/docs work from the D-38 session
+landed there). There is further **uncommitted** work on top of it as of this
+writing: `CLAUDE.md`, `docs/DECISIONS.md`, `docs/preregistration.md`, and
+`docs/self-improving-agents-proposal.md` all modified, plus the second
+review round's fixes to `src/cbs/scaffolds/fork_bridge.py` and
+`tests/test_fork_bridge.py` (concurrency/drain fixes, status-aware trace
+reconstruction — see D-38). Nothing from this stretch has been committed
+yet — check `git status` before assuming otherwise. If code and this file
+disagree, trust the code and `git log` — update this file when that happens.
 
 **The bar just changed.** The user has explicitly stated the goal is not just
 a working instrument but the strongest possible paper — targeting NeurIPS,
@@ -52,10 +54,12 @@ important thing to skim before making a change that touches something already
 built — a lot of things that look like arbitrary choices (why is `S_star`'s
 selection blind to the hidden oracle? why does `pass_at_k` need `N_max` bigger
 than the comparison budget?) are load-bearing decisions with a paper trail.
-[`docs/preregistration.md`](docs/preregistration.md) holds the statistical plan
-and every threshold still marked `[TO FIX]` — those must be chosen **before**
-Phase 5 runs for real, not after seeing results, or the whole point of
-pre-registering is lost.
+[`docs/preregistration.md`](docs/preregistration.md) holds the statistical
+plan. Its §3 thresholds are now **locked** (signed off 2026-08-04, D-14/D-32)
+and must not be revisited after seeing results, or the whole point of
+pre-registering is lost. §4 (models and task families) still carries
+`[TO FIX]`, but that's unbuilt engineering (the SWE-bench Verified/Polyglot
+integration), not an open judgment call.
 
 ---
 
@@ -71,7 +75,7 @@ pre-registering is lost.
 | 5 | Crossing test, ablation matrix | determination **logic** done (`cbs.crossing`); running it for real is blocked (§3) |
 | 6 | Statistical plan, interpretation matrix, write-up | bootstrap CIs / BH correction / matrix placement **done**; the write-up itself needs real results |
 
-354 tests, all passing (`./venv/Scripts/python.exe -m pytest`, a few minutes —
+380 tests, all passing (`./venv/Scripts/python.exe -m pytest`, a few minutes —
 the HumanEval/MBPP tests each verify every reference solution *and* every
 derived public-test subset against the real sandbox, so they alone are well
 over a thousand subprocess executions).
@@ -127,80 +131,118 @@ agent runs as a separate OS process inside a Docker container, not something
 `InterceptionSession` can wrap in-process — so `cbs.scaffolds.fork_bridge`
 intercepts at the network layer instead (`ModelCallProxy`, a real reverse
 proxy between the container and the model server). Unit-tested locally
-(`tests/test_fork_bridge.py`, 14 tests against a real backend server) and
-then validated against 7 real Polyglot tasks, catching three real bugs along
+(`tests/test_fork_bridge.py`, now 26 tests against a real backend server)
+and validated against 7 real Polyglot tasks, catching three real bugs along
 the way — a module-level global (`polyglot.harness.llm`) that has to be set
 before calling `process_entry`, a missing `build_env_images` setup step, and
 a genuine race condition in the proxy itself (caught by re-running tests
-after an unrelated edit, not by design review — see D-38 for the full,
-slightly humbling story). **Still open**: every real task run so far shows
-the baseline agent making one plain generation and stopping, never actually
-invoking a tool — plausibly real 7B-model behavior with `tool_choice="auto"`,
-not a bug (the code path was checked and is correct), but the `tool_call`
-classification remains validated only against synthetic conversations, not
-a real tool-call round trip, until one is observed.
+after an unrelated edit, not by design review). **A second, independent
+4-dimension review round then found and fixed two more real critical bugs**
+(reset()/stop() not draining in-flight handler threads — a real cross-task
+contamination risk; unhandled backend exceptions silently dropping a call
+from `.events` entirely) plus a moderate one (failed calls were being
+counted as real generations) — see D-38 for the full, slightly humbling
+story of both rounds, including what was deliberately left unfixed and why.
+**Resolved, 2026-08-05: the `tool_call` classification path is now validated
+against a real tool-call round trip, not just synthetic conversations.**
+9/9 unforced real runs (`tool_choice="auto"`) still show the baseline agent
+making one plain generation and stopping — plausibly real 7B-model behavior,
+not a bug, and still an open question about baseline agent behavior in its
+own right. But rather than keep waiting on it to happen unprompted, forced
+the issue directly: an **isolated copy** of the frozen agent
+(`hgm/toolcheck_agent_src/`, never the canonical `measured_default_agent/`)
+had its two hardcoded `tool_choice="auto"` sites changed to `"required"` —
+deliberate, clearly-scoped, validation-only, not real measurement data.
+Result: a real 64-round tool-using trajectory, correctly classified
+end-to-end — `used_expanding: true` produced by a real run for the first
+time (previously only ever seen in synthetic tests), a genuine substantive
+patch (passed most of the hidden suite, failed one edge case), not a
+degenerate trace. Full detail in `docs/DECISIONS.md` D-38's closing update.
 
-**What's actually still open**, logged in `docs/DECISIONS.md`'s "Still open"
-table — check that table before assuming something needs to be figured out
-from scratch:
-- **D-12 — which fork.** **Now researched three ways**, not two — source
-  inspection + GitHub API metadata for all three, full write-up in
-  `docs/DECISIONS.md`'s D-12 section. **Recommendation: `metauto-ai/HGM` as
-  primary** over the brief's stated default (`jennyzzt/dgm`) — same
-  integration cost, more actively maintained, more interesting selection
-  mechanism (clade/subtree promise estimation, ICLR 2026 oral). **New as of
-  this session: `facebookresearch/HyperAgents`** surfaced by the D-36 novelty
-  check — it's DGM's own original author (`jennyzzt`) extending DGM herself
-  (with Jeff Clune, Jakob Foerster), pushed as recently as yesterday relative
-  to this check, and its own authors admit "evaluation protocols remain
-  fixed" (i.e. they haven't solved the elicitation-vs-expansion question
-  either). Given the paper's ambition, recommended as **a second `S_evo`
-  variant to run alongside HGM, not instead of it** — showing a result holds
-  across two independently-built evolutionary mechanisms is much stronger
-  than one implementation's idiosyncrasy. One real catch: **HyperAgents is
-  CC BY-NC-SA 4.0, not Apache-2.0** like DGM/HGM — fine for academic use, but
-  keep any code touching it in its own clearly-separated module rather than
-  merged into the rest of `cbs`, since share-alike would otherwise pull that
-  license onto whatever it's merged with. **Still not yet confirmed by the
-  user** — a recommendation in the log, not a unilateral decision.
-- **D-31 — how `cbs` tasks meet the fork's agent — now concretely scoped**,
-  not just framed as two abstract options. Shallow-cloned HGM and read the
-  actual source: it already ships **complete, working harnesses for both
-  SWE-bench Verified and Polyglot** (`swe_bench/harness.py`,
-  `polyglot/harness.py`, a repo-root `Dockerfile`; `evaluate_agent.py --split
-  Verified` is a real, already-supported invocation), and **both interception
-  points D-24 needs already exist as single, well-defined choke points** —
-  every model call funnels through `llm.py:get_response_from_llm`, every
-  verification funnels through `hgm_utils.eval_agent` →
-  `swe_bench.harness.harness(...)`. That means **option (b) — evolve natively
-  against SWE-bench Verified/Polyglot, keep `humaneval`/`mbpp`/
-  `transfer_reasoning` for `S0`/`S_star` only — turns out cheaper than option
-  (a) (adapting `cbs` tasks into one-file git repos), not more expensive**,
-  once actually scoped: (a) still requires inventing a translation layer
-  between two task representations that were never designed to correspond;
-  (b) reuses HGM's own harness code directly, and its one real cost (Docker-
-  per-instance verification) is already required for D-23 regardless. **Still
-  a recommendation pending confirmation**, but now "confirm (b)" rather than
-  "figure out what (b) costs" — full write-up in `docs/DECISIONS.md`.
+**D-12, D-31, and D-14 are now all confirmed by the user (2026-08-04)** —
+read this before assuming any of them are still open judgment calls; only
+the engineering work they imply remains.
+- **D-12 — fork choice, confirmed.** `metauto-ai/HGM` is the primary `S_evo`
+  (actively maintained, clade/subtree promise estimation, ICLR 2026 oral).
+  `facebookresearch/HyperAgents` runs as a second, independently-implemented
+  `S_evo` variant — its own authors admit "evaluation protocols remain
+  fixed," i.e. they haven't solved the elicitation-vs-expansion question
+  either, and showing a crossing result holds across two independently-built
+  evolutionary mechanisms is much stronger than one implementation's
+  idiosyncrasy. **HyperAgents is CC BY-NC-SA 4.0, not Apache-2.0** — keep any
+  code touching it in its own clearly-separated module, never merged into
+  the rest of `cbs`, since share-alike would otherwise pull that license onto
+  whatever it's merged with. `jennyzzt/dgm` is kept available only as the
+  brief's requested literature-baseline reference (§5.1), not run as a third
+  `S_evo`. **Not yet built** — neither fork has actually been cloned into
+  this repo yet.
+- **D-31 — task integration, confirmed.** Option (b): `S_evo` evolves
+  natively against HGM's own already-working `swe_bench/harness.py` and
+  `polyglot/harness.py`, not `humaneval`/`mbpp`/`transfer_reasoning`, which
+  remain useful for `S0`/`S_star` calibration only. `S0`/`S_star` will also
+  get measured on SWE-bench Verified, via a thin `cbs` wrapper around HGM's
+  own harness rather than a from-scratch port, so all three scaffolds sit on
+  the same substrate for the primary comparison. **Not yet built.**
 
-Everything reachable *without* those has been built: the full measurement
+**D-39, new this session — both forks shallow-cloned locally (this machine
+has no Docker but does have plain GitHub access) and checked against real
+source rather than left as the D-12 comparison table's estimate:**
+- **HGM needs no `llm.py` patch at all** (D-37's finding, re-confirmed
+  against a fresh clone) — `create_client` already has a native
+  `elif "vllm" in model.lower()` branch. Don't go looking for a patch to
+  write here; there isn't one.
+- **HyperAgents does need one, and it's a different shape than assumed.**
+  Its `agent/llm.py:get_response_from_llm` is not shared code with HGM's
+  `llm.py` — it's a separate implementation built on `litellm.completion()`
+  with no `api_base`/vLLM awareness at all. Pointing it at a local vLLM
+  server needs a real, small patch (~10-20 lines: pass `api_base=<url>` and
+  a `hosted_vllm/<model>`-style prefix through `completion_kwargs` when a
+  designated local-model string is used — litellm's own documented
+  mechanism). Don't assume zero-cost parity with HGM here.
+- **HyperAgents' Docker networking already defaults to `network_mode="host"`**
+  (`utils/docker_utils.py`) — D-37's bridge-network-can't-reach-localhost fix
+  needed for HGM does **not** need to be re-applied for HyperAgents. A real
+  cost reduction, not just a wash against the litellm patch above.
+- The model-call chokepoint is still singular in both forks (`task_agent.py`/
+  `meta_agent.py` → `llm_withtools` → `agent/llm.py:get_response_from_llm`),
+  so `fork_bridge.py`'s network-layer proxy should still work unmodified for
+  HyperAgents in principle.
+- Also found while reading `swe_bench/report.py`: actual pass/fail grading
+  isn't in `harness()` at all (that only produces a candidate patch) — it's
+  `make_report` → `run_evals`, which shells out to the vendored SWE-bench
+  package's own `run_evaluation.py`. `cbs`'s SWE-bench Verified wrapper needs
+  to call that, not just `harness()`, to get a real resolved/unresolved
+  verdict. Full detail, plus a flagged-but-unresolved `SWE-bench` vs.
+  `SWE-bench_Verified` dataset-loading discrepancy in HGM's own code, in
+  `docs/DECISIONS.md` D-39.
+- **None of this is execution-verified** — there is no Docker on this
+  machine to run either fork's container path. Source-verified only, same
+  epistemic status D-12 had before D-37 actually ran something for real.
+  Don't let "read the source" get reported as "confirmed working."
+
+Everything reachable *without a host* has been built: the full measurement
 layer, validated end-to-end against a deterministic mock model and against
 real vendored benchmark code, with the analysis logic (crossing determination,
 interpretation-matrix placement, bootstrap CIs, multiple-comparison
 correction) ready and waiting for real data to point at.
 
-**If the user confirms the fork and provisions a host, that's the natural
-next phase of work** — patching `llm.py`'s `create_client` for a local vLLM
-endpoint (~20-30 lines; the DeepSeek/OpenRouter branches already show the
-pattern), resolving D-31, and bridging the agent function through
-`cbs.scaffolds.evolved.EvolvedScaffold`.
+**Once a host is re-provisioned** (D-37's Lambda instance was terminated by
+the user after the smoke test — nothing was lost except locally-cached
+Docker images/model weights; the persistent filesystem with `hgm`/`cbs_pkg`
+survives if the same filesystem is reattached), the natural next phase of
+work is: writing and testing HyperAgents' local-endpoint patch (D-39),
+forking HGM and HyperAgents into the repo for real, building D-31's
+SWE-bench Verified/Polyglot wrapper against `make_report`/`run_evals`, and
+bridging the agent function through `cbs.scaffolds.evolved.EvolvedScaffold`.
 
-**If not**, the reachable work without infra is: getting sign-off on the
-`preregistration.md` `[TO FIX]` thresholds (D-14/D-32 — each now has full
-reasoning attached, not bare placeholders, so this is "review and confirm or
-push back," not "figure out from scratch") — needs zero infra and can happen
-with the user right now. Both HumanEval+ (D-34) and MBPP+ (D-35) upgrades are
-done as of this session.
+**D-14 — preregistration thresholds, signed off.** All ten rows in
+`docs/preregistration.md` §3 are now marked **locked**, not `[TO FIX]` — see
+D-32. Per this project's own preregistration discipline, **these values must
+not be revisited after seeing any real Phase 4/5 results**. `[TO FIX]`
+remains only on §4 (models and task families), which is unbuilt engineering
+(the SWE-bench Verified/Polyglot integration D-31 just confirmed), not an
+open judgment call. Both HumanEval+ (D-34) and MBPP+ (D-35) upgrades are
+done.
 
 **Both "+" upgrades each surfaced real upstream bugs, found by validating
 against the real sandbox rather than trusting vendored "official" data**:

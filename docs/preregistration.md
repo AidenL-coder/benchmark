@@ -48,36 +48,36 @@ the schedule is part of the shard's resume key.
 
 ---
 
-## 3. Thresholds **[TO FIX before Phase 5]**
+## 3. Thresholds **(signed off 2026-08-04 — locked, see below)**
 
 The combination logic for every row below is implemented and tested
 (`cbs.crossing.evaluate_crossing`, `cbs.interpretation.place_in_interpretation_matrix`,
-`cbs.stats.benjamini_hochberg` — see `docs/DECISIONS.md` D-28). What remains is
-choosing the **values**, not writing the code that consumes them — each is a
-required parameter with no default, specifically so it cannot be used
-un-chosen. The recommendations below (`docs/DECISIONS.md` D-32) go beyond bare
-placeholders to full reasoning, but **still need explicit sign-off** before
-`[TO FIX]` can be removed — these are genuine judgment calls about acceptable
-risk, not things to lock in unilaterally.
+`cbs.stats.benjamini_hochberg` — see `docs/DECISIONS.md` D-28). Every value
+below was chosen and locked while blind to any real Phase 4/5 results —
+no run against a real evolved scaffold has happened yet (see
+`docs/DECISIONS.md` D-32 for the full sign-off record and reasoning behind
+each). **These values must not be revisited after seeing results.** Any
+future change to a row below invalidates preregistration for runs that used
+the old value; treat this table as frozen, not as a living default.
 
-| Parameter | Symbol / arg | Recommended value | Status |
+| Parameter | Symbol / arg | Locked value | Status |
 |---|---|---|---|
-| Frontier budget | `N_max` | 1000 | **[TO FIX]** |
-| Crossing cutoff | `p_hat(x) < 1/N_max` | 0.001 (follows from `N_max`) | **[TO FIX]** |
-| Reliability of a crossing | `evaluate_crossing(k, K, ...)` | k=6, K=10 | **[TO FIX]** |
+| Frontier budget | `N_max` | 1000 | **locked** |
+| Crossing cutoff | `p_hat(x) < 1/N_max` | 0.001 (follows from `N_max`) | **locked** |
+| Reliability of a crossing | `evaluate_crossing(k, K, ...)` | k=6, K=10 | **locked** |
 | Compute-match tolerance | `MatchedComputeHarness(tolerance=...)` | 0.05 | implemented default, not disputed |
 | Confidence level | — | 0.95, Clopper-Pearson two-sided | implemented default, not disputed |
-| Multiple-comparison correction | `cbs.stats.benjamini_hochberg(alpha=...)` | 0.05, across tasks within a family | **[TO FIX]** |
-| Near-zero crossing rate | `place_in_interpretation_matrix(crossing_rate_epsilon=...)` | 0.0 (exact) | **[TO FIX]** |
-| "High" transfer retention | `place_in_interpretation_matrix(transfer_retention_high=...)` | 0.5 | **[TO FIX]** |
-| "Large" overfitting gap | `place_in_interpretation_matrix(overfitting_gap_high=...)` | 0.2 | **[TO FIX]** |
-| Number of evolution seeds | — | ≥3 | **[TO FIX]** |
+| Multiple-comparison correction | `cbs.stats.benjamini_hochberg(alpha=...)` | 0.05, across tasks within a family | **locked** |
+| Near-zero crossing rate | `place_in_interpretation_matrix(crossing_rate_epsilon=...)` | 0.0 (exact) | **locked** |
+| "High" transfer retention | `place_in_interpretation_matrix(transfer_retention_high=...)` | 0.5 | **locked** |
+| "Large" overfitting gap | `place_in_interpretation_matrix(overfitting_gap_high=...)` | 0.2 | **locked** |
+| Number of evolution seeds | — | ≥3 | **locked** |
 
 A task counts as **crossed** only if all four conditions of brief §3.3 hold
 simultaneously: reliable solve at `k/K`, `p_hat(x)` below cutoff, compute matched
 to `N_max`, and ablating support-expanding ops removes the solve.
 
-### Reasoning behind each recommendation
+### Reasoning behind each locked value
 
 **`N_max = 1000`.** Rule-of-three bounds a zero-success task at `p < 0.003` —
 comfortably inside the brief's stated 10³–10⁴ range and a defensible
@@ -138,24 +138,32 @@ posture as `N_max`.
 
 ---
 
-## 4. Models and task families **[TO FIX]**
+## 4. Models and task families **[TO FIX — implementation, not a judgment call]**
 
 - Frozen models: ≥2 families × ≥2 sizes. Proposed Qwen2.5-Coder-1.5B / 7B, plus
   one of Llama-3.x-8B or DeepSeek-Coder.
-- Primary (coding): both original and evalplus-upgraded HumanEval and MBPP
-  vendored and integrated (`cbs.tasks.families.humaneval`/`.humanevalplus`/
-  `.mbpp`/`.mbppplus`; 164/163 + 427/374 problems, every canonical/reference
-  solution verified against the real sandbox — docs/DECISIONS.md
-  D-27/D-29/D-34/D-35). Use the "+" variants (`humanevalplus`, `mbppplus`)
-  over the originals for anything beyond instrument validation — both
-  upgrades are done. Validating each surfaced real upstream bugs (a task
-  whose own generated test fails its reference solution, a floating-point-
-  tolerance gap, three tasks whose generated test asserts nothing at all) —
-  all found empirically, excluded, and documented rather than silently
-  patched into the vendored data; see D-34/D-35 for each. **[TO FIX]** before
-  this backs a real capability claim: add a LiveCodeBench slice (investigated
-  and scoped as a materially bigger, cross-cutting change — D-33, not simply
-  "vendor another file") and a SWE-bench Verified subset.
+- `S0`/`S_star` frontier estimation and calibration (coding): both original and
+  evalplus-upgraded HumanEval and MBPP vendored and integrated
+  (`cbs.tasks.families.humaneval`/`.humanevalplus`/`.mbpp`/`.mbppplus`;
+  164/163 + 427/374 problems, every canonical/reference solution verified
+  against the real sandbox — docs/DECISIONS.md D-27/D-29/D-34/D-35). Use the
+  "+" variants (`humanevalplus`, `mbppplus`) over the originals for anything
+  beyond instrument validation — both upgrades are done. Validating each
+  surfaced real upstream bugs (a task whose own generated test fails its
+  reference solution, a floating-point-tolerance gap, three tasks whose
+  generated test asserts nothing at all) — all found empirically, excluded,
+  and documented rather than silently patched into the vendored data; see
+  D-34/D-35 for each.
+- `S_evo` (D-12/D-31, confirmed 2026-08-04): evolves natively against HGM's own
+  SWE-bench Verified and Polyglot harnesses, not the `humaneval`/`mbpp`
+  families above — D-31's option (b). `S0`/`S_star` still get measured on
+  SWE-bench Verified too (via a `cbs` task-family wrapper around HGM's own
+  `swe_bench/harness.py`, not a from-scratch port) so all three scaffolds sit
+  on the same substrate for the primary comparison. **Still genuinely
+  `[TO FIX]`** — this is unbuilt engineering work, not an undecided threshold:
+  the SWE-bench Verified wrapper and Polyglot integration don't exist yet.
+  LiveCodeBench remains out of scope for now (D-33 — a materially
+  bigger, cross-cutting change, not simply "vendor another file").
 - Transfer (reasoning): resolved (D-17) — `transfer_reasoning`, 10
   hand-authored math/logic/combinatorics tasks (`cbs.tasks.families.transfer_reasoning`;
   D-30), never optimised on, frozen entirely into the `transfer` split.
@@ -191,7 +199,7 @@ compute, for `S_evo` versus `S_star`.
   method); report across evolution seeds as a distribution, never a single run.
 - Multiple-comparison correction across tasks: Benjamini-Hochberg
   (`cbs.stats.benjamini_hochberg`), implemented and unit-tested against a
-  hand-computed reference case; **[alpha TO FIX]**, proposed 0.05.
+  hand-computed reference case; alpha **locked at 0.05** (§3).
 - Any comparison not at matched compute is flagged as such in the output, not
   silently reported (`ComparisonRecord.realised_spend_matched`).
 - Truncated runs (budget-exhausted) are excluded from capability claims rather
@@ -237,4 +245,7 @@ compute, for `S_evo` versus `S_star`.
 
 ---
 
-*Complete every **[TO FIX]** and commit before the first Phase 5 run.*
+*§3's thresholds are locked (signed off 2026-08-04). §4's remaining
+**[TO FIX]** is unbuilt engineering (the SWE-bench Verified/Polyglot
+integration for `S0`/`S_star`), not an open judgment call — complete it and
+commit this file before the first Phase 5 run.*

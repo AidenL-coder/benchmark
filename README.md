@@ -21,25 +21,41 @@ Specs: [`docs/self-improving-agents-proposal.md`](docs/self-improving-agents-pro
 | 1 | Task schema, verifier, frozen hashed splits: toy, HumanEval(+), MBPP(+), transfer_reasoning | **done** — 6 families, all "+" upgrades complete (D-34/D-35). LiveCodeBench scoped-not-started (D-33); SWE-bench Verified still open (D-13) |
 | 2 | Frontier estimation + estimator validation | **done — DoD met** |
 | 3 | `S0` / `S_star` baselines, matched-compute harness, elicitation control | **done** |
-| 4 | `S_evo` measurement layer (interception-based tagging, archive, ablation) | measurement layer **done**; execution blocked on D-23 |
-| 5 | Crossing test and ablations | determination logic **done** (`cbs.crossing`); running it for real blocked on D-23 |
+| 4 | `S_evo` measurement layer (interception-based tagging, archive, ablation, network-layer proxy bridge) | measurement layer **done** (D-24/D-25, D-38's `cbs.scaffolds.fork_bridge`); a real GPU+Docker host was proven working end-to-end once (D-37) then intentionally terminated after the smoke test — running it for real again needs a host re-provisioned |
+| 5 | Crossing test and ablations | determination logic **done** (`cbs.crossing`); running it for real needs the same host as Phase 4 |
 | 6 | Analysis and write-up | statistical plan pieces (bootstrap CIs, BH correction) and interpretation-matrix placement **done** (`cbs.stats`, `cbs.interpretation`); write-up itself needs real results |
 
 ---
 
-## Phase 4 is blocked on infrastructure, not code
+## Phase 4 needs a re-provisioned host, not more code or open decisions
 
 `S_evo`'s measurement layer (interception-based support tagging, archive
 persistence, ablation) is built and tested — see DECISIONS.md D-24 through
-D-26. What is *not* possible yet is running a real forked self-improvement
-loop: that means executing self-modifying orchestration code with live network
-access to a model endpoint, which brief §10 requires Docker for. Neither this
-machine (no Docker) nor Colab (containers can't nest Docker) can provide that
-boundary. **D-23**: this needs a rented Linux host with both a GPU and Docker —
-which conveniently also satisfies the GPU need for real vLLM serving in the
-same box — plus a decision on which fork to use (D-12, still open). Flagging
-this now rather than working around it, since routing `S_evo` through an
-unsandboxed host would violate the project's own safety guardrail.
+D-26. Running a real forked self-improvement loop means executing
+self-modifying orchestration code with live network access to a model
+endpoint, which brief §10 requires Docker for; neither this machine (no
+Docker) nor Colab (containers can't nest Docker) can provide that boundary.
+
+**D-23 is resolved (D-37)**: a real Docker+GPU host (Lambda Labs, 1x A10) was
+provisioned and proven working end-to-end — HGM cloned, vLLM serving
+`Qwen2.5-Coder-7B-Instruct` with tool-calling, a real containerized agent run
+that reached the model and got a genuine response. That instance has since
+been **intentionally terminated** by the user (cost management, not a
+failure) — its persistent filesystem (with the working `hgm`/`cbs_pkg`
+checkout) survives if reattached, but local disk (Docker images, cached
+weights) does not. Running Phase 4/5 for real needs a host re-provisioned the
+same way, not new infrastructure design.
+
+**D-12 (which fork) and D-31 (how tasks meet the fork's agent) are both
+confirmed** (2026-08-04): `metauto-ai/HGM` as primary `S_evo`,
+`facebookresearch/HyperAgents` as a second independently-implemented variant
+(kept in its own CC-BY-NC-SA-licensed module), `jennyzzt/dgm` retained only
+as a literature-baseline reference; task integration is D-31's option (b) —
+`S_evo` evolves natively against HGM's own SWE-bench Verified/Polyglot
+harnesses rather than adapting `cbs`'s own task families. Neither fork is
+cloned into this repo yet, and the SWE-bench Verified wrapper for `S0`/`S_star`
+is unbuilt — real engineering work for once a host exists again, not open
+questions. See `docs/DECISIONS.md` D-12/D-31/D-37/D-38 for the full detail.
 
 ---
 
@@ -115,7 +131,9 @@ hidden tests and near-certain pretraining contamination — documented in each
 family's `ATTRIBUTION.md` and DECISIONS.md D-27/D-29/D-30/D-34/D-35: fine for
 instrument validation, not a real capability claim on their own; prefer the
 "+" variants for that. LiveCodeBench (investigated and scoped as a materially
-bigger change, D-33) and SWE-bench Verified remain open (D-13).
+bigger change, D-33) remains out of scope. SWE-bench Verified is not yet
+built but is now confirmed **load-bearing** rather than optional (D-13, per
+D-12/D-31) — it's the substrate `S_evo` will evolve against natively.
 
 **`S_star`** (`cbs.scaffolds.s_star`) — the strong fixed baseline (brief §4):
 best-of-N, execution feedback, tool use (a static compile check), and
