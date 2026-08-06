@@ -16,14 +16,23 @@ evolved *scaffold*'s blast radius is arbitrary orchestration code with live
 network access, executed repeatedly across generations, indefinitely. Brief
 section 10 makes Docker mandatory for exactly this reason.
 
-This machine has no Docker (`docs/DECISIONS.md` D-02), and Colab cannot nest
-Docker either -- so there is currently nowhere in this project's
-infrastructure that can safely run real self-modifying scaffold code. See D-23.
-What is safe to build now -- and is built here -- is the adapter contract any
-forked loop's agents must satisfy, validated against synthetic agent functions
-that make ordinary, non-self-modifying calls. None of it requires trusting
-self-modifying code, and all of it is exactly what plugs in unchanged once a
-Docker-capable, GPU-capable host is available.
+This module was originally written when this project had no Docker-capable
+host at all (`docs/DECISIONS.md` D-02) -- Colab cannot nest Docker either --
+so there was nowhere in this project's infrastructure that could safely run
+real self-modifying scaffold code. **That premise is now out of date**: a
+real Docker+GPU host has existed and been proven working end to end since
+D-23/D-37, and D-38 built the actual bridge a Docker-hosted agent needs
+(`cbs.scaffolds.fork_bridge` -- a network-layer proxy, not this module's
+in-process interception, because a forked loop's agent runs as a genuinely
+separate OS process; see that module's docstring for why the two mechanisms
+differ). `EvolvedScaffold`/`InterceptionSession` below remain exactly what
+they always were -- the adapter contract for an in-process `AgentFunction`,
+validated against synthetic agents -- and stay useful for exactly that
+shape of integration; they are simply no longer the *only* bridge this
+project has, and are not what a Docker-hosted fork like HGM/HyperAgents
+actually plugs into. What is still true and still not done: no generation
+of a real, evolving scaffold (as opposed to today's frozen baseline agent)
+has actually been run.
 
 Tagging by interception, not self-report
 ------------------------------------------

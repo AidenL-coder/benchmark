@@ -2,16 +2,26 @@
 
 Read this first. It's the fast on-ramp — what this project is, what exists,
 what's actually been verified vs. assumed, what's blocked, and where to look
-for more depth. Last commit is `74be8f9` (message `f` — a checkpoint commit,
-not a normal descriptive one; the fork_bridge/docs work from the D-38 session
-landed there). There is further **uncommitted** work on top of it as of this
-writing: `CLAUDE.md`, `docs/DECISIONS.md`, `docs/preregistration.md`, and
-`docs/self-improving-agents-proposal.md` all modified, plus the second
-review round's fixes to `src/cbs/scaffolds/fork_bridge.py` and
-`tests/test_fork_bridge.py` (concurrency/drain fixes, status-aware trace
-reconstruction — see D-38). Nothing from this stretch has been committed
-yet — check `git status` before assuming otherwise. If code and this file
-disagree, trust the code and `git log` — update this file when that happens.
+for more depth. Last commit is `64d436f` (message `edits` — a checkpoint
+commit, not a normal descriptive one; it carries the full D-39/D-40 build:
+`cbs.tasks.swebench`, `cbs.scaffolds.swebench_scaffold`,
+`scripts/swebench_glue.py`, the `fork_bridge.usage_from_events` addition,
+and the accompanying docs). There is further **uncommitted** work on top of
+it as of this writing: `CLAUDE.md`, `README.md`, and `docs/DECISIONS.md`
+all modified (documenting D-40's repair-branch closure, D-41's `TS_sample`
+root-cause/fix, and D-42's Polyglot `S0` build), plus a small real fix to
+`scripts/hgm_run_task_with_interception.py` (it captured a task's trace but
+never charged its usage — now wired through `fork_bridge.usage_from_events`,
+D-40's own function, re-validated against a real Polyglot task) and a
+stale-docstring fix to `src/cbs/scaffolds/evolved.py` (it used to claim no
+Docker-capable host existed anywhere in this project's infrastructure — no
+longer true since D-23/D-37). New, not-yet-committed files: `src/cbs/
+tasks/polyglot.py`, `src/cbs/scaffolds/polyglot_scaffold.py`,
+`scripts/polyglot_glue.py`, `scripts/verify_hgm_ts_sample_fix.py`,
+`tests/test_polyglot.py`, `tests/test_polyglot_scaffold.py` (D-42/D-41).
+Nothing from this stretch has been committed yet — check `git status`
+before assuming otherwise. If code and this file disagree, trust the code
+and `git log` — update this file when that happens.
 
 **The bar just changed.** The user has explicitly stated the goal is not just
 a working instrument but the strongest possible paper — targeting NeurIPS,
@@ -70,12 +80,12 @@ integration), not an open judgment call.
 | 0 | Config, model client, sandbox, budget accountant | **done** |
 | 1 | Task schema, verifier, frozen hashed splits | **done** — 6 `Task`-shaped families: `toy`, `humaneval` (164), `humanevalplus` (163, D-34), `mbpp` (427), `mbppplus` (374, D-35), `transfer_reasoning` (10, hand-authored). Use the "+" variants over the originals for anything beyond instrument validation. SWE-bench Verified is deliberately **not** one of these — D-40 found `Task`/`TaskSuite` doesn't fit it (repo+diff, not prompt+code-string) and built `cbs.tasks.swebench.SweBenchInstance`/`SweBenchSuite` instead, now real-data-execution-verified end to end (see Phase 4/5 note and D-40). LiveCodeBench investigated and scoped as a materially bigger, cross-cutting change, not started (D-33). |
 | 2 | Frontier estimation (Clopper-Pearson, Good-Turing, Chao1, rarefaction) | **done, DoD met** — validated against known ground truth, verifier false-positive rate checked at 0/600 |
-| 3 | `S0`, `S_star`, matched-compute harness, elicitation control | **done** for the `Task`-shaped families; SWE-bench Verified variants (`S0SweBench`/`SStarSweBench`, D-40) also **done and real-execution-verified** — both run end-to-end against a real instance with the real vLLM model, producing correct resolved/unresolved verdicts |
+| 3 | `S0`, `S_star`, matched-compute harness, elicitation control | **done** for the `Task`-shaped families; SWE-bench Verified variants (`S0SweBench`/`SStarSweBench`, D-40) also **done and real-execution-verified** — both run end-to-end against a real instance with the real vLLM model, producing correct resolved/unresolved verdicts. `S0Polyglot` (D-42) likewise done and real-execution-verified for D-31's other confirmed native substrate; `SStarPolyglot` not yet built (needs the same container-splitting surgery D-40 did) |
 | 4 | `S_evo` measurement layer: interception-based tagging, ablation, archive | measurement layer **done**, and the underlying interception/proxy/budget machinery is now proven against real Docker+real-model infrastructure twice over (D-38's HGM/HyperAgents work, D-40's SWE-bench Verified work); *running an actual self-improving loop* (not just the frozen baseline agent) has still not happened |
 | 5 | Crossing test, ablation matrix | determination **logic** done (`cbs.crossing`); running it against a real evolved scaffold's results has still not happened |
 | 6 | Statistical plan, interpretation matrix, write-up | bootstrap CIs / BH correction / matrix placement **done**; the write-up itself needs real results |
 
-414 tests, all passing (`./venv/Scripts/python.exe -m pytest`, a few minutes —
+437 tests, all passing (`./venv/Scripts/python.exe -m pytest`, a few minutes —
 the HumanEval/MBPP tests each verify every reference solution *and* every
 derived public-test subset against the real sandbox, so they alone are well
 over a thousand subprocess executions).
@@ -119,11 +129,18 @@ forked repo got swept into every archive-node snapshot; the editable
 SWE-bench install had to be redone after moving the venv; the initial
 baseline's task count turned out not to be controlled by `--max_task_evals`
 at all) — full detail in D-37, worth reading before
-repeating any of them. **One thing is not yet resolved**: a `TS_sample`
-argmax-on-an-empty-sequence crash in the node-selection logic, hit only after
-deliberately shrinking the task set to 1 for the smoke test — plausibly an
-artifact of that shrinkage, not a real bug, but not reproduced or root-caused
-against the real 60-task subset yet.
+repeating any of them. **The one thing D-37 left unresolved is now resolved
+too (D-41)**: the `TS_sample` argmax-on-an-empty-sequence crash was
+root-caused by reading `hgm.py`/`tree.py` directly, not by re-running the
+smoke test — `expand()`'s `mean_utility > 0` filter goes empty whenever
+*every* archive node has solved exactly zero tasks so far, which is a real
+risk at 60-task scale too (not merely a 1-task artifact), given this
+session's own repeated finding that the frozen 7B baseline rarely produces
+a working fix under `tool_choice="auto"`. Patched `expand()` to fall back
+to all evaluated nodes when that filter is empty, rather than crash;
+confirmed crash-free at both 1-task and 60-task-scale analogues, and
+provably inert in the normal case, via `scripts/verify_hgm_ts_sample_fix.py`
+— a cheap, isolated reproduction, not a real GPU/Docker run.
 
 **The measurement-layer bridge itself is now built (D-38), correcting the
 "just monkeypatch it" framing this file and D-12/D-37 used to have.** HGM's
@@ -368,13 +385,60 @@ mapping by reading real code on both sides, not guessing:
   unresolved — agreeing with `S0`'s own verdict on the same instance.
   Best-of-N, execution feedback, self-consistency, and multi-trajectory
   budget accounting are all now confirmed against real infrastructure, not
-  just synthetic tests. **One honest gap, stated plainly**: neither
-  candidate actually failed its `PASS_TO_PASS` check, so the *repair*
-  branch itself (a real failure triggering a real augmented-prompt retry)
-  hasn't been observed in a live run — assessed as low risk (the repair
-  prompt logic is pure Python already unit-tested, and re-running `agent_fn`
-  with a different string is the same code path as the first call) but not
-  claimed as covered.
+  just synthetic tests.
+- **The repair branch itself, closed for real, same session.** Rather than
+  wait for the live 7B model to naturally produce a diff that fails
+  `pass_to_pass` (never observed in ~10+ real runs this session), the gap
+  was closed deterministically: a hand-built, deliberately-broken one-line
+  diff for `astropy__astropy-12907` (`if transform.n_inputs == 1 and ...:` →
+  `if True:`) as a synthetic first attempt, the instance's own gold `patch`
+  as the synthetic repair — with the **real** `real_verify_fn` (real Docker,
+  real `git apply`, real `pytest`) doing all the actual verification. The
+  bad diff itself needed a fix first (a hand-escaped Python-string diff hit
+  `corrupt patch at line 11` from `git apply`; rewritten as a plain heredoc
+  file, anchored on a code line instead of the docstring, applied cleanly)
+  and was confirmed genuinely broken by running it directly: 6 of 13
+  `PASS_TO_PASS` tests failed. Wired into a real `SStarSweBench.solve()`
+  call, the full repair mechanism fired for real: `trace.op_counts() ==
+  {'execution_feedback': 2, 'adaptive_prompt_rewrite': 1, 'self_consistency':
+  1}` — `adaptive_prompt_rewrite` (the actual repair step) had never fired
+  in any prior real run. The second call's prompt was confirmed at runtime
+  to carry the real failure text forward; its gold-patch diff passed
+  `pass_to_pass` for real, and the final hidden-oracle `FAIL_TO_PASS` check
+  came back `passed: True` — a genuinely resolved verdict, through three
+  separate real Docker verify-container runs. Every scaffold/verification
+  mechanism `SStarSweBench` has is now demonstrated against real
+  infrastructure, ending in a correct positive result when the repair is
+  actually correct — only the model call itself was synthetic. D-40's one
+  stated gap is closed; see `docs/DECISIONS.md` D-40 for the full trace.
+
+**D-42, new this session — `S0` built and real-execution-verified for
+Polyglot, D-31's *other* confirmed native substrate**, completing what D-40
+only did for SWE-bench Verified. Read HGM's own `polyglot_benchmark_
+metadata.json` (225 real entries) and `polyglot/harness.py:process_entry`
+directly before designing: unlike SWE-bench Verified, there's no `Task.
+tests`/`public_tests`-style split at the data level (oracle safety instead
+comes from the hidden test content only being revealed by `git reset --hard
+test_commit`, inside the agent's own container, after it has already
+stopped), and `process_entry` is atomic — one call runs the agent *and*
+grades it, with no seam to split into separate agent/verify containers the
+way SWE-bench Verified's harness had. Built `cbs.tasks.polyglot`
+(`PolyglotInstance`/`PolyglotSuite`/`load_polyglot_benchmark`, keeping the
+whole original entry dict rather than re-deriving fields, to avoid the
+translation-mismatch bugs D-40 hit repeatedly), `cbs.scaffolds.
+polyglot_scaffold.S0Polyglot` (one injected function, not an agent/verify
+pair), and `scripts/polyglot_glue.py` (calls `process_entry` directly).
+Validated against real infrastructure: the loader against the real
+225-entry file (a real, previously undocumented finding — HGM's own
+hardcoded "60-task" baseline subset is actually only 59 *unique* tasks,
+since `python__dominoes` appears in both `medium.json` and `small.json`),
+and `S0Polyglot.solve()` run fully end-to-end against a real Polyglot
+instance with the real vLLM model and real Docker, producing a correct
+`empty_patch`/`passed: False` verdict (same no-tool-use pattern as every
+other real run this session). `SStarPolyglot` deliberately not built —
+no execution-feedback hook exists without the same container-splitting
+surgery D-40 did; a half-built repair loop with no real signal to feed it
+would be worse than an honestly `S0`-only family for now.
 
 Everything reachable *without a host* has been built: the full measurement
 layer, validated end-to-end against a deterministic mock model and against
@@ -382,14 +446,25 @@ real vendored benchmark code, with the analysis logic (crossing determination,
 interpretation-matrix placement, bootstrap CIs, multiple-comparison
 correction) ready and waiting for real data to point at.
 
-**Once a host is re-provisioned** (D-37's Lambda instance was terminated by
-the user after the smoke test — nothing was lost except locally-cached
-Docker images/model weights; the persistent filesystem with `hgm`/`cbs_pkg`
-survives if the same filesystem is reattached), the natural next phase of
-work is: writing and testing HyperAgents' local-endpoint patch (D-39),
-forking HGM and HyperAgents into the repo for real, building D-31's
-SWE-bench Verified/Polyglot wrapper against `make_report`/`run_evals`, and
-bridging the agent function through `cbs.scaffolds.evolved.EvolvedScaffold`.
+**Update — this paragraph described a host that had been terminated; that
+is no longer the situation.** A Lambda instance has been live and in active
+use for this entire D-38/D-39/D-40/D-41 stretch (re-provisioned once
+already this project, per D-37's update; if it is ever terminated again,
+the same re-provisioning steps apply — Docker group membership, PATH for
+vLLM/ninja, the persistent filesystem reattaching `hgm`/`hgm_venv`/`cbs_pkg`
+intact). Of the four things this paragraph used to list as the "next
+phase": HyperAgents' local-endpoint patch (D-39) is done and validated
+end-to-end; D-31's SWE-bench Verified/Polyglot wrapper is done and
+execution-verified (D-40, including the repair branch); D-37's remaining
+crash is root-caused and fixed (D-41). **Only "forking HGM and HyperAgents
+into the repo for real" remains genuinely undone** — what exists today is
+real, working clones on the remote instance's persistent filesystem
+(`/lambda/nfs/cbs-project/hgm`, `.../HyperAgents`), patched and validated,
+but not actual GitHub forks under the user's account with real commit
+history. This specifically needs `gh` CLI or a personal access token
+authenticated as the user — neither is available in this local dev
+environment, so it's blocked on the user's own GitHub credentials, not on
+any remaining design or engineering question.
 
 **D-14 — preregistration thresholds, signed off.** All ten rows in
 `docs/preregistration.md` §3 are now marked **locked**, not `[TO FIX]` — see

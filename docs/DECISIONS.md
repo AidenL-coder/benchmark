@@ -1690,6 +1690,32 @@ unresolved question about baseline agent behavior under this model — not
 something this trial was designed to answer, and not something to mistake
 it for having answered.
 
+**Small real gap found and closed, next session (2026-08-06)**:
+`scripts/hgm_run_task_with_interception.py` captured each task's trace via
+`reconstruct_trace_from_events` but never turned the same proxy events into
+a chargeable `Usage` via `fork_bridge.usage_from_events` — the exact
+function D-40 built to close this — leaving this script's own output
+without real token accounting even after that gap was closed elsewhere.
+Fixed by wiring `usage_from_events` into the per-task record; also caught
+that the remote instance's copy of this script had drifted (still an older
+pre-D-38 docstring) and had never been re-synced after that validation
+pass, fixed by re-copying the current local version wholesale rather than
+patching around the drift. Re-validated against `javascript__queen-attack`
+(the same task first used to hand-verify the trace-reconstruction logic):
+real output now includes `usage: {"calls": 1, "prompt_tokens": 1239,
+"completion_tokens": 652}`, sourced from the same proxied events already
+used for the trace — same no-tool-use, single-generation pattern as every
+other real run this session, `eval_result: "empty_patch"`, confirming the
+fix adds real accounting without disturbing anything already working.
+Also fixed, same pass: `cbs.scaffolds.evolved`'s module docstring still
+claimed "there is currently nowhere in this project's infrastructure that
+can safely run real self-modifying scaffold code" — true when written,
+false since D-23/D-37/D-38 — corrected to point at `fork_bridge` as the
+mechanism that actually exists now for a Docker-hosted fork, while noting
+`EvolvedScaffold` itself remains the right (and still unused) adapter for
+a hypothetical in-process `AgentFunction`, a different shape of integration
+than any of HGM/HyperAgents.
+
 ---
 
 ## D-39 — HyperAgents integration cost, checked against real source now that
@@ -2279,6 +2305,246 @@ initial call — `agent_fn` has no notion of "first attempt" vs "repair," it
 just runs whatever string it's given. Still, an explicit remaining item,
 not something to claim as covered.
 
+**Update, same session — gap closed for real, not left as a paper argument.**
+Rather than wait for the live 7B model to naturally produce a diff that
+fails `pass_to_pass` (never observed in ~10+ real runs this session — see
+D-39/above, the model consistently makes zero or ineffective edits under
+`tool_choice="auto"`), the repair branch was exercised deterministically: a
+hand-constructed, deliberately-broken diff for `astropy__astropy-12907`
+(`if transform.n_inputs == 1 and ...:` replaced with `if True:` in
+`separable.py`, one line) as the first-attempt "diff," with the instance's
+own gold `patch` substituted on any repair call, wired through a synthetic
+`agent_fn` but the **real** `real_verify_fn` (real Docker, real `git apply`,
+real `pytest`) — no part of the verification/repair machinery itself was
+mocked, only the model call.
+
+First, the bad diff itself needed validating as actually broken, not just
+assumed broken: a hand-written unified diff hit `error: corrupt patch at
+line 11` from `git apply` on the first attempt (a hunk-header/escaping
+mistake from constructing it as an embedded Python string with an escaped
+`"""` context line) — fixed by writing the diff as a plain heredoc file
+instead of a Python string literal, and by anchoring the hunk on an
+unambiguous code line rather than the docstring. The corrected diff applied
+cleanly and, run through `real_verify_fn` against `instance.pass_to_pass`
+directly, produced exactly the expected real result: **6 failed, 7 passed**
+(`compound_model0/2/3/5/7/8` fail; `compound_model1/4`, `test_custom_model_
+separable`, etc. pass) — confirming both that the diff is genuinely broken
+and that `real_verify_fn` correctly distinguishes broken-fix failures on
+`PASS_TO_PASS`, not just "always reports pass" (the same validation
+discipline as the gold-patch/empty-diff checks above, now extended to a
+partial-failure case).
+
+With the bad diff confirmed broken, a full `SStarSweBench.solve()` run
+(`max_candidates=1, max_repairs_per_candidate=1, stop_on_first_public_
+pass=True`) against a synthetic `agent_fn` (call #1 → bad diff, call #2 →
+`instance.patch`) and the real `verify_fn` produced, entirely for real:
+`trace.op_counts() == {'execution_feedback': 2, 'adaptive_prompt_rewrite':
+1, 'self_consistency': 1}` — confirming, for the first time this session,
+that `adaptive_prompt_rewrite` (the actual repair step, distinct from
+`execution_feedback`'s per-attempt check) fires. The repair prompt's
+`problem_statement` was confirmed at runtime to actually contain the
+real-feedback marker text ("Your previous attempt produced this patch...")
+on the second call, i.e. the augmented prompt genuinely carried the first
+attempt's diff and the real pytest failure output forward, not a stub.
+The second trajectory's diff (gold patch) then passed `pass_to_pass` for
+real, `self_consistency` selected it as the sole passing candidate
+(`n_candidates: 1, n_public_passing: 1`), and the final hidden-oracle
+`FAIL_TO_PASS` check came back **`passed: True`, `failed_tests: ()`** — a
+genuinely resolved verdict, end to end, through real Docker containers at
+every step (three separate verify-container runs: the standalone bad-diff
+check, the in-loop repair check, and the final `FAIL_TO_PASS` check).
+
+This is now a complete, real demonstration of every `SStarSweBench`
+mechanism — best-of-N, execution feedback, adaptive repair, self-consistency,
+and hidden-oracle verification — firing correctly against real Docker
+infrastructure, ending in a correct resolved verdict when the "repair" is
+actually correct. The only thing still synthetic is the model call itself
+(substituted with a fixed diff instead of a live trajectory); every piece of
+`cbs`'s own scaffold and verification logic ran unmodified and real. D-40's
+stated gap is closed.
+
+---
+
+## D-41 — D-37's `TS_sample` argmax-on-empty crash: root-caused for real
+(not just "probably a shrinkage artifact"), and fixed · **C**
+
+D-37 left one loose end: after a deliberately-shrunk 1-task smoke test's
+baseline evaluation completed, HGM's outer loop crashed with `ValueError:
+attempt to get argmax of an empty sequence` in `TS_sample`/`expand()`,
+flagged as "most likely an artifact of shrinking the task list to 1... but
+not reproduced or root-caused against the real 60-task subset." Reproducing
+it at real 60-task scale would mean actually running HGM's real baseline
+evaluation and then its node-selection logic — which is functionally the
+first step of starting a real self-improvement loop, the one action this
+project has been explicit should get a dedicated scoping conversation, not
+get slipped into via a diagnostic. So this was resolved the other way:
+by reading HGM's actual source (`hgm.py`) directly, rather than by spending
+real GPU/Docker time.
+
+**Root cause, confirmed by reading the code, not inferred:** `expand()`
+(`hgm.py:383`) filters the archive to `nodes = [n for n in hgm_utils.nodes.
+values() if np.isfinite(n.mean_utility) and n.mean_utility > 0]`, then
+calls `TS_sample(decendant_evals)` — which computes `np.argmax(np.random.
+beta(alphas, betas))` — and indexes `nodes` with the result. `Node.
+mean_utility` (`tree.py:61`) is `np.inf` if `num_evals == 0`, else `sum(
+utility_measures) / num_evals`. In the 1-task smoke test, the root node was
+evaluated once, failed (`utility_measures = [0]`), giving `mean_utility ==
+0.0` — which fails the `> 0` filter, leaving `nodes = []`. `TS_sample([])`
+then computes `np.random.beta([], [])` (a valid empty array, no error) and
+`np.argmax(<empty array>)` — which is exactly where `ValueError: attempt to
+get argmax of an empty sequence` comes from. Confirmed by direct code
+reading, not by running it again.
+
+**This is the crucial correction to D-37's own framing**: the crash's real
+trigger is not "too few tasks" — it is "every node the archive has ever
+evaluated has mean_utility exactly 0", i.e. *nothing in the archive has
+solved anything yet*. Task count is only relevant insofar as more real,
+varied tasks make it somewhat less likely that literally zero get solved by
+chance — it does not make the underlying code path safe. Given this
+project's own repeated, real, empirical finding this session — the frozen
+Qwen2.5-Coder-7B baseline essentially never produces a working fix under
+`tool_choice="auto"` (D-38/D-39/D-40: ~10+ real SWE-bench/Polyglot attempts,
+not one genuine resolution) — there is a real, live risk that the real
+60-task baseline evaluation also yields `mean_utility == 0` for the root
+node, in which case this exact crash *would* recur at real scale, unchanged
+from the 1-task case. This was not a smoke-test-only artifact; it was an
+unhandled degenerate case in HGM's own algorithm that this project's
+specific choice of frozen baseline makes a real, non-hypothetical risk.
+
+**Fixed, not just documented** — a minimal, targeted patch to `expand()` on
+the remote instance's HGM checkout (`/lambda/nfs/cbs-project/hgm/hgm.py`,
+`.orig` backup kept, same discipline as every other real fork patch this
+project has made): if the `mean_utility > 0` filter leaves `nodes` empty,
+fall back to every evaluated (`isfinite`) node regardless of utility, rather
+than crashing. This changes nothing about the normal case (≥1 node with
+positive utility) — the fallback branch is never reached there — and only
+changes behavior in the exact case that previously crashed the whole loop.
+
+**Validated cheaply, not assumed correct** — `scripts/
+verify_hgm_ts_sample_fix.py` replicates both the original and patched
+`expand()` logic against a fake node registry (pure Python/numpy, no HGM
+checkout, no Docker, no GPU, no real model call) and confirms, mechanically:
+(1) the original logic really does crash on the exact 1-task-smoke-test
+scenario; (2) it also crashes on a 60-task-scale analogue (three nodes, each
+with 60/60 failures) — direct evidence this is not fixed merely by having
+more tasks; (3) the patched logic does not crash in either case; (4) in a
+normal case where one node has positive mean_utility, the patched logic
+selects identically to the original across 200 trials with the same seed —
+the fallback path is provably inert when it isn't needed.
+
+**What this does and doesn't resolve**: D-37's crash is now root-caused and
+fixed at the code level, and validated as fixed against both the exact
+scenario that produced it and its real-scale analogue — nothing further is
+needed here before a real loop runs. It does *not* mean the real 60-task
+baseline evaluation has actually been run, or that this project has
+observed what the archive's early state looks like for real — that
+observation still only happens the first time the real loop is actually
+started, which remains a deliberate, separate decision.
+
+---
+
+## D-42 — `S0` on the Polyglot benchmark: built and real-execution-verified,
+completing Phase 3's coverage of D-31's *other* confirmed native `S_evo`
+substrate · **C**
+
+D-40 built and validated `S0`/`S_star` for SWE-bench Verified, one of the
+two task families D-31 confirmed `S_evo` evolves natively against. The
+other, Polyglot, had only ever been exercised through the ad-hoc
+`hgm_run_task_with_interception.py` validation script (D-38) — real, but
+not wired into `cbs`'s own `Scaffold`-shaped measurement layer the way
+SWE-bench Verified now is. This closes that gap for `S0`.
+
+**Real data investigated before designing, not assumed**: HGM's own
+`polyglot/polyglot_benchmark_metadata.json` (225 real entries, 6 languages:
+cpp 26, go 39, java 47, javascript 49, python 34, rust 30) and
+`polyglot/harness.py:process_entry` were both read directly. Two structural
+findings shaped the design:
+
+1. **No `Task.tests`/`public_tests`-style split at the data level** — each
+   entry has exactly one `files["test"]` file, not separate visible/hidden
+   sets. Oracle safety instead comes from *when* the real test content
+   becomes visible: the agent's own container is checked out at
+   `base_commit` (no `test_commit` applied), and `process_entry` only
+   reveals the true grading tests by `git reset --hard {test_commit}`
+   *after* the agent has already produced its patch and stopped. Several
+   languages' real eval commands additionally compile-gate most test cases
+   behind a flag that real grading *does* set (confirmed in
+   `polyglot/constants.py`, e.g. C++'s `cmake -DEXERCISM_RUN_ALL_TESTS=1`),
+   so `process_entry`'s `eval_result` already reflects the full hidden
+   suite, not an always-visible smoke subset — nothing extra needed here to
+   get a true hidden-oracle check.
+2. **`process_entry` is atomic — one call runs the agent *and* grades it**,
+   unlike SWE-bench Verified's harness, which had a natural seam
+   (`docker_build`/`test_spec`) D-40 used to split a separate agent-only
+   container from a separate verify-only one. Polyglot's container does
+   both, sequentially, itself. This means only **one** injected function is
+   needed here (`PolyglotAgentFunction`), not the agent/verify pair
+   `swebench_scaffold.py` has — and, more importantly, means
+   `SStarSweBench`-style execution feedback (checking a candidate against
+   something before the hidden oracle) has **no ready-made hook** for
+   Polyglot the way `PASS_TO_PASS` gave SWE-bench Verified one. Building
+   one would need the same kind of container-splitting surgery D-40 did —
+   real, unbuilt, separate engineering, not attempted here. **`SStarPolyglot`
+   does not exist yet, deliberately** — a half-built repair loop with no real
+   feedback signal would be worse than an honestly-scoped `S0`-only family.
+
+**Built**: `cbs.tasks.polyglot.PolyglotInstance`/`PolyglotSuite`/
+`load_polyglot_benchmark` (mirrors `SweBenchInstance`'s frozen-hashed-split
+discipline, but — unlike SWE-bench Verified's public HuggingFace dataset —
+takes an explicit metadata-file path, since this data has no stable
+`cbs`-independent host; it lives only inside a real HGM checkout's vendored
+`polyglot-benchmark/` submodule). Keeps the *entire* original entry dict as
+`raw` rather than re-deriving named fields and reconstructing them for
+`process_entry` later, specifically to avoid the class of bug D-40 hit
+repeatedly translating `SweBenchInstance` back into swebench's expected
+shape (missing `hints_text`, JSON-encoded list fields, ...) — there is
+nothing to mistranslate if the original dict is simply kept whole.
+13 tests (`tests/test_polyglot.py`), synthetic fixtures only (the real
+metadata file is ~6MB and lives only in a real HGM checkout, not vendored,
+same reasoning as why SWE-bench Verified isn't vendored either).
+
+`cbs.scaffolds.polyglot_scaffold.PolyglotRunResult`/`PolyglotResult`/
+`S0Polyglot` (10 tests, `tests/test_polyglot_scaffold.py`, synthetic fakes,
+same style as `test_swebench_scaffold.py`) — one trajectory, no retries,
+budget charged post-hoc (same honest limitation as `S0SweBench`, a
+Docker-run trajectory's cost isn't known until it has run).
+
+`scripts/polyglot_glue.py` — `real_agent_fn` calls HGM's own
+`polyglot.harness.process_entry` directly (not reimplemented), wrapped with
+`fork_bridge.ModelCallProxy` for real tagging/usage, plus the two real
+gotchas D-38 already found and documented (the `polyglot_harness.llm`
+module-level global, and `process_entry` not building environment images
+itself — `build_env_images` called first, mirroring `harness()`'s own
+setup).
+
+**Validated against real infrastructure, not just synthetic tests**:
+
+1. `load_polyglot_benchmark` against the real, complete 225-entry metadata
+   file: all entries parse, `suite_hash` computes deterministically, and —
+   a real, previously-undocumented finding — filtering to HGM's own
+   hardcoded 60-task baseline subset (`medium.json + small.json`) actually
+   yields only **59 unique instances**, not 60: `python__dominoes` appears
+   in *both* `medium.json` and `small.json`, confirmed directly (`medium.
+   count("python__dominoes") == 1`, `small.count("python__dominoes") ==
+   1`). CLAUDE.md/D-37's "60 tasks" framing is accurate as an evaluation
+   count (the baseline really is Docker-evaluated 60 times) but not as a
+   *unique*-task count — worth remembering when budgeting or reporting
+   real baseline-evaluation numbers for Polyglot.
+2. `S0Polyglot.solve()` run fully end-to-end for real against
+   `javascript__queen-attack` (real vLLM model, real Docker container, real
+   `process_entry` call): `usage=Usage(calls=1, prompt_tokens=1239,
+   completion_tokens=722)`, `trace.op_counts() == {"single_call": 1}`,
+   `eval_result="empty_patch"`, `passed=False` — the same no-tool-use,
+   no-edit pattern observed in essentially every real run this session
+   under `tool_choice="auto"`, not a bug in this new code; the pipeline
+   correctly reports what actually happened rather than a spurious pass.
+
+**Net result**: Phase 3's `S0` coverage now spans both of D-31's confirmed
+native `S_evo` substrates against real infrastructure — SWE-bench Verified
+(D-40) and Polyglot (this entry). `S_star`'s Polyglot analogue remains
+explicitly unbuilt, needing the same container-splitting work D-40 did, not
+a design question left unresolved.
+
 ---
 
 ## Still open
@@ -2294,14 +2560,19 @@ not something to claim as covered.
 | D-17 | ~~Which reasoning set is the transfer family~~ — resolved: `transfer_reasoning`, D-30 | **C** | — |
 | D-23 | ~~Provision a Linux host with both GPU and Docker~~ — **resolved, D-37**: Lambda Labs A10 instance, Docker+GPU+vLLM confirmed working, Phase 0 DoD met for real | **C** | — |
 | D-36 | Novelty check against current literature — citation-graph pass (DGM/HGM/SICA), full METR/Apollo read, and forward-citation check on the İşcan cluster all **done**; gap holds as of this check. **Only remaining piece: one more recency sweep close to the actual submission date** | **D** | before submission, ideally before large infra spend |
-| D-37 | Root-cause the `TS_sample` argmax-on-empty crash against the real 60-task subset (not yet reproduced at real scale — only hit under a deliberately shrunk 1-task test) | **D** | before any measured `S_evo` run |
+| D-37 | ~~Root-cause the `TS_sample` argmax-on-empty crash~~ — **root-caused and fixed, 2026-08-06 (D-41)**: the real trigger is any archive state where every node has `mean_utility == 0` (nothing has solved anything yet), not "too few tasks" — confirmed by reading `hgm.py`/`tree.py` directly. Patched `expand()` to fall back to all evaluated nodes when the positive-utility filter is empty; confirmed inert in the normal case and crash-free in both the 1-task and 60-task-scale degenerate cases via an isolated reproduction (`scripts/verify_hgm_ts_sample_fix.py`), no real GPU/Docker run needed | **C** | — |
 | D-38 | ~~Validate `tool_call` classification against a real tool-invoking episode~~ — **resolved, 2026-08-05**: forced `tool_choice="required"` in an isolated (non-canonical) agent copy, observed a real 64-round tool-using trajectory, correctly classified end-to-end (`used_expanding: true` produced by a real run for the first time). Separately, whether the baseline agent invokes tools *unprompted* under normal `tool_choice="auto"` remains open — 9/9 unforced real attempts still show none | **C** | — |
 | D-39 | ~~HyperAgents local-endpoint patch + full task run~~ — **done, 2026-08-05**: litellm patch, `network_mode="host"`, hardcoded-`--model` fix, and a real ~600s-hang root cause (eval-index suffix corrupting the model string) all found and fixed; a full real polyglot task now completes end-to-end in ~4s | **C** | — |
-| D-40 | ~~`S0`/`S_star` on SWE-bench Verified~~ — **done and execution-verified, 2026-08-05/06**: both `S0SweBench` and `SStarSweBench` run fully end-to-end for real (real vLLM model, real Docker/HGM harness, real instance), each producing a correct resolved/unresolved verdict; best-of-N, execution feedback, self-consistency, and budget summation across multiple real trajectories all confirmed working. Found and fixed 4 more real bugs along the way (see write-up). **One honest remaining gap**: the repair branch itself (a real trajectory failing `PASS_TO_PASS` and triggering a real repair attempt) hasn't been observed in a real run yet, since both tested candidates passed on the first try — assessed as low risk (pure-Python repair-prompt logic already unit-tested; re-invoking `agent_fn` with a different prompt is the same code path) but not claimed as covered | **C** | — |
+| D-40 | ~~`S0`/`S_star` on SWE-bench Verified~~ — **done and fully execution-verified, 2026-08-05/06**: both `S0SweBench` and `SStarSweBench` run fully end-to-end for real (real vLLM model, real Docker/HGM harness, real instance), each producing a correct resolved/unresolved verdict; best-of-N, execution feedback, self-consistency, and budget summation across multiple real trajectories all confirmed working. Found and fixed 4 more real bugs along the way (see write-up). **The one remaining gap — the repair branch itself — is now also closed**: a deterministic test (synthetic bad-diff-then-gold-patch, real Docker/`git apply`/`pytest` throughout) exercised `adaptive_prompt_rewrite` for the first time, ending in a genuinely correct `passed: True` verdict. No remaining gaps in this scaffold's mechanisms | **C** | — |
+| D-41 | ~~Root-cause + fix `expand()`'s empty-argmax crash (D-37)~~ — **done, 2026-08-06**: real trigger identified from source (every archive node at `mean_utility == 0`, not "too few tasks"); `hgm.py`'s `expand()` patched to fall back to all evaluated nodes rather than crash; fix validated crash-free at both 1-task and 60-task-scale analogues, and provably inert in the normal case, via `scripts/verify_hgm_ts_sample_fix.py` — no real GPU/Docker spend needed | **C** | — |
+| D-42 | ~~`S0` on the Polyglot benchmark~~ — **done and real-execution-verified, 2026-08-06**: `cbs.tasks.polyglot`/`cbs.scaffolds.polyglot_scaffold.S0Polyglot`/`scripts/polyglot_glue.py` built and run fully end-to-end for real (real vLLM model, real Docker/HGM harness); completes Phase 3's coverage of D-31's other confirmed native substrate. `SStarPolyglot` deliberately not built yet — no execution-feedback hook exists without the same container-splitting surgery D-40 did for SWE-bench Verified | **C** | — |
 
 D-14 is now locked in `preregistration.md` and must not be revisited after
-seeing results. D-23 is resolved (D-37); D-12/D-31 are confirmed but not yet
-built. The practical blocker on actually *running* Phase 4/5 is now real
-engineering work (forking HGM+HyperAgents, building the SWE-bench Verified/
-Polyglot wrapper) plus re-provisioning a host, not any remaining open
-decision.
+seeing results. D-23 is resolved (D-37); D-37's own remaining crash is now
+also resolved (D-41); D-12/D-31 are confirmed but not yet built, though
+Phase 3's `S0` now covers both of D-31's confirmed substrates for real
+(D-40/D-42). The practical blocker on actually *running* Phase 4/5 is now
+real engineering work (forking HGM+HyperAgents for real, building
+`SStarPolyglot`'s container-splitting surgery) plus the deliberate decision
+of when to actually start the real loop, not any remaining open decision or
+unresolved bug.

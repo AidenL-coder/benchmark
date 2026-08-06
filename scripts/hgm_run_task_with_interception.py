@@ -20,6 +20,13 @@ far made exactly one plain generation and stopped) -- the `tool_call`
 classification path is only proven against synthetic conversations
 (`tests/test_fork_bridge.py`), not yet against a real tool-call round trip.
 
+Each record now also carries real `usage` (`calls`/`prompt_tokens`/
+`completion_tokens`), via `fork_bridge.usage_from_events` (D-40) -- this
+script previously captured the trace but never turned the same proxied
+events into chargeable `Usage`, leaving a real gap between "this data is
+already sitting in `.events`" and "actually charged to `cbs.budget`" for
+this task family specifically.
+
 Prerequisites this script does NOT set up for you (must already be true of
 the environment it runs in):
   * The real vLLM server must be listening on a port OTHER than the one this
@@ -41,7 +48,11 @@ import json
 import sys
 from pathlib import Path
 
-from cbs.scaffolds.fork_bridge import ModelCallProxy, reconstruct_trace_from_events
+from cbs.scaffolds.fork_bridge import (
+    ModelCallProxy,
+    reconstruct_trace_from_events,
+    usage_from_events,
+)
 
 
 def _load_polyglot_entry(task_id: str) -> dict:
@@ -124,6 +135,7 @@ def main() -> None:
             )
             events = proxy.events
             trace = reconstruct_trace_from_events(events)
+            usage = usage_from_events(events)
             records.append(
                 {
                     "task_id": task_id,
@@ -131,6 +143,11 @@ def main() -> None:
                     "passed": result.get("eval_result") == "resolved",
                     "n_proxy_events": len(events),
                     "trace": trace.as_dict(),
+                    "usage": {
+                        "calls": usage.calls,
+                        "prompt_tokens": usage.prompt_tokens,
+                        "completion_tokens": usage.completion_tokens,
+                    },
                 }
             )
     finally:

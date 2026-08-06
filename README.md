@@ -20,7 +20,7 @@ Specs: [`docs/self-improving-agents-proposal.md`](docs/self-improving-agents-pro
 | 0 | Environment, config, model/sandbox/budget layers | **done** |
 | 1 | Task schema, verifier, frozen hashed splits: toy, HumanEval(+), MBPP(+), transfer_reasoning | **done** — 6 `Task`-shaped families, all "+" upgrades complete (D-34/D-35). LiveCodeBench scoped-not-started (D-33). SWE-bench Verified deliberately uses a separate, non-`Task` representation instead (`cbs.tasks.swebench`, D-40) — see Phase 4/5 |
 | 2 | Frontier estimation + estimator validation | **done — DoD met** |
-| 3 | `S0` / `S_star` baselines, matched-compute harness, elicitation control | **done** for the `Task`-shaped families; SWE-bench Verified variants (`S0SweBench`/`SStarSweBench`, D-40) also **done and real-execution-verified** — both run end-to-end against a real instance with a real vLLM model, producing correct resolved/unresolved verdicts |
+| 3 | `S0` / `S_star` baselines, matched-compute harness, elicitation control | **done** for the `Task`-shaped families; SWE-bench Verified variants (`S0SweBench`/`SStarSweBench`, D-40) also **done and real-execution-verified** — both run end-to-end against a real instance with a real vLLM model, producing correct resolved/unresolved verdicts. `S0Polyglot` (D-42) covers D-31's other confirmed native substrate the same way; `SStarPolyglot` not yet built |
 | 4 | `S_evo` measurement layer (interception-based tagging, archive, ablation, network-layer proxy bridge) | measurement layer **done** (D-24/D-25, D-38's `cbs.scaffolds.fork_bridge`); a GPU+Docker host has now been proven working end-to-end twice, across two separate provisionings (D-37, then again this session) — the underlying interception/proxy/budget machinery is proven against real Docker+model infrastructure via HGM, HyperAgents (D-38/D-39), and SWE-bench Verified (D-40); *running an actual self-improving loop* (not just the frozen baseline agent) has still not happened |
 | 5 | Crossing test and ablations | determination logic **done** (`cbs.crossing`); running it against a real evolved scaffold's results has still not happened |
 | 6 | Analysis and write-up | statistical plan pieces (bootstrap CIs, BH correction) and interpretation-matrix placement **done** (`cbs.stats`, `cbs.interpretation`); write-up itself needs real results |
@@ -61,11 +61,17 @@ non-`Task` representation — a repo-plus-diff problem doesn't fit
 swebench_scaffold.S0SweBench`/`SStarSweBench` (unit-tested against
 synthetic fakes), and `scripts/swebench_glue.py` (the real Docker/HGM glue)
 have all been run for real against a real SWE-bench Verified instance,
-producing correct resolved/unresolved verdicts for both scaffolds. See
-`docs/DECISIONS.md` D-40 for the full validation trail, including four real
-bugs found and fixed along the way and the honestly-flagged remaining gaps
-(coarse pytest-exit-code pass/fail rather than per-test-node parsing; the
-repair branch itself not yet observed in a live run).
+producing correct resolved/unresolved verdicts for both scaffolds. The
+repair branch itself — `execution_feedback` failing, `adaptive_prompt_
+rewrite` constructing a real augmented prompt, a second trajectory, and a
+final hidden-oracle recheck — was then exercised deterministically (a
+hand-built broken diff standing in for a failing model attempt, the
+instance's own gold patch standing in for a successful repair) through the
+real Docker/`git apply`/`pytest` machinery, ending in a genuinely correct
+`passed: True` verdict. See `docs/DECISIONS.md` D-40 for the full validation
+trail, including four real bugs found and fixed along the way and the one
+remaining honestly-flagged simplification (coarse pytest-exit-code pass/fail
+rather than per-test-node parsing).
 
 **What's actually left for Phase 4/5**: forking HGM/HyperAgents into a real,
 running self-improvement loop and observing whether it crosses the
@@ -202,6 +208,21 @@ already enforce), and self-consistency across trajectories. Both run
 end-to-end against real Docker infrastructure and a real vLLM-served
 model, producing correct resolved/unresolved verdicts — not just
 unit-tested against synthetic fakes, though that validation exists too.
+
+**`S0` on the Polyglot benchmark** (`cbs.tasks.polyglot`,
+`cbs.scaffolds.polyglot_scaffold`, `scripts/polyglot_glue.py`, D-42) — D-31's
+*other* confirmed native `S_evo` substrate, given the same treatment.
+HGM's own `polyglot.harness.process_entry` runs the agent trajectory and
+grades the result in one atomic container call, unlike SWE-bench Verified's
+harness — so `S0Polyglot` needs only one injected function
+(`PolyglotAgentFunction`), not an agent/verify pair, and `SStarPolyglot`'s
+execution-feedback loop has no ready-made hook to build against yet (would
+need the same container-splitting surgery D-40 did). Run end-to-end for
+real against a real Polyglot instance, real Docker, and the real vLLM
+model. A real, previously-undocumented side-finding from validating the
+loader against HGM's own 225-entry metadata file: the hardcoded "60-task"
+baseline subset (`medium.json + small.json`) actually contains only 59
+*unique* task IDs — `python__dominoes` appears in both files.
 
 ---
 
