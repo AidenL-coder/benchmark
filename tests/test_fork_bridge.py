@@ -27,10 +27,12 @@ from threading import Thread
 
 import pytest
 
+from cbs.budget import Usage
 from cbs.scaffolds.fork_bridge import (
     ModelCallProxy,
     ProxiedCall,
     reconstruct_trace_from_events,
+    usage_from_events,
 )
 
 
@@ -193,14 +195,22 @@ class TestModelCallProxyRecording:
         assert len(proxy.events) == 1
 
 
-def _event(messages: list[dict], tool_calls: list | None = None, status: int = 200) -> ProxiedCall:
+def _event(
+    messages: list[dict],
+    tool_calls: list | None = None,
+    status: int = 200,
+    usage: dict | None = None,
+) -> ProxiedCall:
+    response_body = {
+        "choices": [
+            {"message": {"role": "assistant", "content": "...", "tool_calls": tool_calls}}
+        ]
+    }
+    if usage is not None:
+        response_body["usage"] = usage
     return ProxiedCall(
         request_body={"messages": messages},
-        response_body={
-            "choices": [
-                {"message": {"role": "assistant", "content": "...", "tool_calls": tool_calls}}
-            ]
-        },
+        response_body=response_body,
         status=status,
     )
 
@@ -454,3 +464,56 @@ class TestModelCallProxyLifecycle:
     def test_stop_without_start_does_not_raise(self):
         p = ModelCallProxy(_free_port(), "http://127.0.0.1:1")
         p.stop()  # must be a no-op, not an AttributeError on a None server
+
+
+class TestUsageFromEvents:
+    """D-40: turning captured proxy events into chargeable `cbs.budget.Usage`,
+    the one real gap between "the compute-matching framework already
+    generalizes to a multi-round agentic trajectory" and "it's actually
+    wired up"."""
+
+    def test_single_successful_call_charges_its_real_tokens(self):
+        events = [
+            _event(
+                [{"role": "user", "content": "hi"}],
+                usage={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+            )
+        ]
+        usage = usage_from_events(events)
+        assert usage == Usage(calls=1, prompt_tokens=10, completion_tokens=5)
+
+    def test_multiple_calls_sum_across_the_whole_trajectory(self):
+        events = [
+            _event([{"role": "user", "content": "hi"}], usage={"prompt_tokens": 10, "completion_tokens": 5}),
+            _event([{"role": "user", "content": "hi"}], usage={"prompt_tokens": 20, "completion_tokens": 8}),
+        ]
+        usage = usage_from_events(events)
+        assert usage == Usage(calls=2, prompt_tokens=30, completion_tokens=13)
+
+    def test_failed_call_is_not_charged(self):
+        """Mirrors reconstruct_trace_from_events's own rule: a failed call
+        attempt never sampled from M and must not inflate charged compute."""
+        events = [
+            _event(
+                [{"role": "user", "content": "hi"}],
+                status=502,
+                usage={"prompt_tokens": 999, "completion_tokens": 999},
+            )
+        ]
+        assert usage_from_events(events) == Usage()
+
+    def test_2xx_with_no_choices_is_not_charged(self):
+        event = ProxiedCall(
+            request_body={"messages": []}, response_body={}, status=200
+        )
+        assert usage_from_events([event]) == Usage()
+
+    def test_missing_usage_field_counts_the_call_but_zero_tokens(self):
+        """A successful call with no/malformed usage accounting degrades to
+        zero tokens for that call rather than raising -- the call itself
+        still happened and must still count."""
+        event = _event([{"role": "user", "content": "hi"}])  # no usage= passed
+        assert usage_from_events([event]) == Usage(calls=1)
+
+    def test_no_events_charges_nothing(self):
+        assert usage_from_events([]) == Usage()

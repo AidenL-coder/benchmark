@@ -68,14 +68,14 @@ integration), not an open judgment call.
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Config, model client, sandbox, budget accountant | **done** |
-| 1 | Task schema, verifier, frozen hashed splits | **done** — 6 families: `toy`, `humaneval` (164), `humanevalplus` (163, D-34), `mbpp` (427), `mbppplus` (374, D-35), `transfer_reasoning` (10, hand-authored). Use the "+" variants over the originals for anything beyond instrument validation. SWE-bench Verified still open (D-13); LiveCodeBench investigated and scoped as a materially bigger, cross-cutting change, not started (D-33). |
+| 1 | Task schema, verifier, frozen hashed splits | **done** — 6 `Task`-shaped families: `toy`, `humaneval` (164), `humanevalplus` (163, D-34), `mbpp` (427), `mbppplus` (374, D-35), `transfer_reasoning` (10, hand-authored). Use the "+" variants over the originals for anything beyond instrument validation. SWE-bench Verified is deliberately **not** one of these — D-40 found `Task`/`TaskSuite` doesn't fit it (repo+diff, not prompt+code-string) and built `cbs.tasks.swebench.SweBenchInstance`/`SweBenchSuite` instead, now real-data-execution-verified end to end (see Phase 4/5 note and D-40). LiveCodeBench investigated and scoped as a materially bigger, cross-cutting change, not started (D-33). |
 | 2 | Frontier estimation (Clopper-Pearson, Good-Turing, Chao1, rarefaction) | **done, DoD met** — validated against known ground truth, verifier false-positive rate checked at 0/600 |
-| 3 | `S0`, `S_star`, matched-compute harness, elicitation control | **done** |
-| 4 | `S_evo` measurement layer: interception-based tagging, ablation, archive | measurement layer **done**; *running* a real evolved scaffold is blocked (§3) |
-| 5 | Crossing test, ablation matrix | determination **logic** done (`cbs.crossing`); running it for real is blocked (§3) |
+| 3 | `S0`, `S_star`, matched-compute harness, elicitation control | **done** for the `Task`-shaped families; SWE-bench Verified variants (`S0SweBench`/`SStarSweBench`, D-40) also **done and real-execution-verified** — both run end-to-end against a real instance with the real vLLM model, producing correct resolved/unresolved verdicts |
+| 4 | `S_evo` measurement layer: interception-based tagging, ablation, archive | measurement layer **done**, and the underlying interception/proxy/budget machinery is now proven against real Docker+real-model infrastructure twice over (D-38's HGM/HyperAgents work, D-40's SWE-bench Verified work); *running an actual self-improving loop* (not just the frozen baseline agent) has still not happened |
+| 5 | Crossing test, ablation matrix | determination **logic** done (`cbs.crossing`); running it against a real evolved scaffold's results has still not happened |
 | 6 | Statistical plan, interpretation matrix, write-up | bootstrap CIs / BH correction / matrix placement **done**; the write-up itself needs real results |
 
-380 tests, all passing (`./venv/Scripts/python.exe -m pytest`, a few minutes —
+414 tests, all passing (`./venv/Scripts/python.exe -m pytest`, a few minutes —
 the HumanEval/MBPP tests each verify every reference solution *and* every
 derived public-test subset against the real sandbox, so they alone are well
 over a thousand subprocess executions).
@@ -191,18 +191,70 @@ source rather than left as the D-12 comparison table's estimate:**
   against a fresh clone) — `create_client` already has a native
   `elif "vllm" in model.lower()` branch. Don't go looking for a patch to
   write here; there isn't one.
-- **HyperAgents does need one, and it's a different shape than assumed.**
-  Its `agent/llm.py:get_response_from_llm` is not shared code with HGM's
-  `llm.py` — it's a separate implementation built on `litellm.completion()`
-  with no `api_base`/vLLM awareness at all. Pointing it at a local vLLM
-  server needs a real, small patch (~10-20 lines: pass `api_base=<url>` and
-  a `hosted_vllm/<model>`-style prefix through `completion_kwargs` when a
-  designated local-model string is used — litellm's own documented
-  mechanism). Don't assume zero-cost parity with HGM here.
-- **HyperAgents' Docker networking already defaults to `network_mode="host"`**
-  (`utils/docker_utils.py`) — D-37's bridge-network-can't-reach-localhost fix
-  needed for HGM does **not** need to be re-applied for HyperAgents. A real
-  cost reduction, not just a wash against the litellm patch above.
+- **HyperAgents needed a real patch, different in shape from HGM's — now
+  written and empirically verified against a real vLLM server (2026-08-05),
+  not just planned.** Its `agent/llm.py:get_response_from_llm` is a separate
+  implementation from HGM's, built on `litellm.completion()` with no
+  `api_base`/vLLM awareness. Cloned onto the persistent filesystem
+  (`/lambda/nfs/cbs-project/HyperAgents/`), patched with a
+  `"vllm-model:<host>"` branch that resolves the real served model name
+  dynamically via `/v1/models` (a hardcoded model string 404s against vLLM
+  0.26.0 — confirmed directly, this is *why* HGM's own generic-fallback code
+  does the same dynamic lookup rather than something to skip). Confirmed
+  HyperAgents needs **no separate tool-calling integration** — unlike HGM,
+  `chat_with_agent` always does prompt-based tool parsing regardless of
+  model, so the one `get_response_from_llm` patch is the complete surface.
+  Also found and fixed a real `max_tokens` bug only by actually calling it:
+  `chat_with_agent` never overrides the library's `MAX_TOKENS=16384`
+  default, which left zero room for input against this deployment's
+  `--max-model-len 16384` — capped to 4096 inside the vLLM branch,
+  matching HGM's own `MAX_OUTPUT_TOKENS`. A dedicated minimal venv
+  (`hyperagents_venv/`) was used rather than installing into the working
+  `hgm_venv`, since HyperAgents' `requirements.txt` pulls in heavy,
+  irrelevant robotics/RL packages for its other domains. Verified working
+  end to end outside Docker: both a raw `get_response_from_llm` call and
+  the actual `chat_with_agent` HyperAgents' own agent code calls returned
+  real, correct responses. The patched file lives only on the remote clone
+  and in scratch space, never in this repo, per the license-separation note
+  above.
+- **Correction, same session — the earlier "Docker networking already
+  solved in HyperAgents" claim was wrong, caught by actually exercising it,
+  not by re-reading more carefully.** It checked `utils/docker_utils.py`'s
+  `network_mode="host"`, but that's a *different* container path (and one
+  of its two hits is for the image-*build* step, not runtime networking at
+  all). The container that actually matters —
+  `domains/polyglot/harness.py:process_entry` copies `task_agent.py` into
+  and runs it there, exactly like HGM's own agent container — is built by
+  `domains/polyglot/docker_build.py:build_container`'s
+  `client.containers.create(...)`, which had no `network_mode` set at all.
+  Patched it the same way as D-37 (`.orig` backup kept). **HyperAgents does
+  need this fix after all** — net cost is the litellm patch plus this one,
+  not less than HGM's own D-37 lift as previously claimed.
+- **Update, second instance (2026-08-05) — a full real HyperAgents task
+  run now completes end-to-end.** Found the harness/Docker-orchestration
+  layer (`domains/polyglot/harness.py`, directly analogous to HGM's own
+  `polyglot/harness.py`), copied HGM's already-prepared
+  `polyglot-benchmark/` data across, and pushed all the way through to a
+  real, complete run. Two more real bugs found and fixed along the way:
+  a missing `GitPython` dependency in the trimmed container
+  `requirements.txt` (kept trimmed permanently — the full one only serves
+  HyperAgents' other, unrelated robotics/RL domains and would waste real
+  time installing Genesis etc. into every task container), and — the
+  significant one — a genuine, fully root-caused ~600s hang: `harness()`'s
+  own `process_evaluation` appends `"_<eval_idx>"` to the model string for
+  output-directory labeling (e.g. `"vllm-model:localhost_0"`), and that
+  suffixed string was reaching `--model`, turning the parsed-out hostname
+  into the unresolvable `localhost_0` — `backoff` then silently retried
+  the resulting connection error for the full configured timeout every
+  time (confirmed to track the timeout value exactly across three
+  reproductions, then confirmed directly and cheaply outside Docker).
+  Fixed by stripping the eval-index suffix specifically at the `--model`
+  call site. Result: `"Running the agent"` → done in ~4 seconds, a real
+  task fully processed. Full root-cause narrative (four candidate
+  hypotheses tested and eliminated in order, cheaply, before finding the
+  real one) in `docs/DECISIONS.md` D-39's closing update — worth reading
+  in full if this ever needs revisiting, since the debugging path itself
+  is the reusable part.
 - The model-call chokepoint is still singular in both forks (`task_agent.py`/
   `meta_agent.py` → `llm_withtools` → `agent/llm.py:get_response_from_llm`),
   so `fork_bridge.py`'s network-layer proxy should still work unmodified for
@@ -215,10 +267,114 @@ source rather than left as the D-12 comparison table's estimate:**
   verdict. Full detail, plus a flagged-but-unresolved `SWE-bench` vs.
   `SWE-bench_Verified` dataset-loading discrepancy in HGM's own code, in
   `docs/DECISIONS.md` D-39.
-- **None of this is execution-verified** — there is no Docker on this
-  machine to run either fork's container path. Source-verified only, same
-  epistemic status D-12 had before D-37 actually ran something for real.
-  Don't let "read the source" get reported as "confirmed working."
+- **Updated**: both forks' Docker/container paths are now execution-verified
+  end to end against this project's real vLLM deployment — HGM since D-37,
+  HyperAgents as of the second-instance update above. What remains
+  unbuilt is `cbs`'s own SWE-bench Verified wrapper (for `S0`/`S_star`),
+  which doesn't exist yet — that's the one concrete remaining piece, not
+  "figure out if either fork's pipeline works at all."
+
+**D-40, new this session — that remaining piece is now concretely scoped
+(not guessed at), and two of its four pieces are actually built.**
+`S0`/`S_star` are built entirely
+around `cbs.tasks.schema.Task` (prompt + assert-based tests + one candidate
+code string) — a SWE-bench Verified instance (repo + commit + problem
+statement, solved by producing a diff) doesn't fit that shape at all, for
+the same reason D-33 didn't force-fit LiveCodeBench. Worked out the actual
+mapping by reading real code on both sides, not guessing:
+- **The atomic unit generalizes cleanly**: one call to `chat_with_agent`
+  (HGM's and HyperAgents' own agent-loop primitive, already exercised
+  extensively this session) is the natural analogue of `S0`'s "one call to
+  `M`" for a task that needs real tool use to solve at all — `S0`-for-
+  SWE-bench is one such trajectory, no retries, submitted as-is.
+- **`cbs.budget`'s accounting already generalizes** — confirmed by reading
+  `budget.py`: nothing in `BudgetAccountant`/`Usage`/`MatchedComputeHarness`
+  assumes a call maps to a `Task`. The one real gap was small and is now
+  **built and tested**: `cbs.scaffolds.fork_bridge.usage_from_events` sums
+  real `prompt_tokens`/`completion_tokens` out of already-captured
+  `ProxiedCall`s (6 new tests, `tests/test_fork_bridge.py` now 32 total).
+- **`S_star`'s execution-feedback mechanism has a real, verified analogue**,
+  not a made-up one: queried the actual `princeton-nlp/SWE-bench_Verified`
+  dataset directly and confirmed every instance carries `FAIL_TO_PASS` (the
+  hidden regression test the fix must satisfy — this family's `tests`) and
+  `PASS_TO_PASS` (the repo's own pre-existing tests, legitimately runnable
+  without revealing whether the target bug is fixed — this family's
+  `public_tests`). Same "hidden oracle queried exactly once" rule carries
+  over unchanged.
+- **Verification reuses the real harness** (`swe_bench/harness.py` +
+  `report.py:make_report`/`run_evals`), per D-31/D-39 — not reimplemented.
+- **The task representation itself is now built**: `cbs.tasks.swebench.
+  SweBenchInstance`/`SweBenchSuite`/`load_swebench_verified`, loading
+  `princeton-nlp/SWE-bench_Verified` directly (not HGM's two-dataset
+  indirection). Validated against the real dataset (10 new tests,
+  `tests/test_swebench.py`) — caught a real, non-obvious bug this same way:
+  `FAIL_TO_PASS`/`PASS_TO_PASS` arrive as JSON-*encoded strings*, not native
+  lists, despite printing like one. New `swebench` optional extra
+  (`datasets>=2.14`) in `pyproject.toml`.
+- **The pure scaffold logic is now built too**: `cbs.scaffolds.
+  swebench_scaffold.S0SweBench`/`SStarSweBench`, using the exact
+  injected-function pattern `cbs.scaffolds.evolved.EvolvedScaffold` already
+  established (`SweBenchAgentFunction`/`SweBenchVerifyFunction` stand in for
+  whatever Docker/HGM machinery actually runs a trajectory) — best-of-N, the
+  PASS_TO_PASS-feedback repair loop, self-consistency, budget charging, and
+  trace merging are all tested with synthetic fakes, no Docker needed
+  (`tests/test_swebench_scaffold.py`, 18 tests, one real logic bug caught
+  and fixed along the way). One real limitation surfaced and documented in
+  the module itself: unlike `s_star.py`'s pre-check, a Docker trajectory's
+  cost isn't known until it's already run, so budget charging here is
+  unavoidably post-hoc.
+- **Update — the user said to keep working autonomously, so the Docker-glue
+  piece was written and validated for real too, not left at the scoping
+  stage.** `scripts/swebench_glue.py` implements `real_agent_fn`/
+  `real_verify_fn` by driving HGM's actual `swebench.harness.docker_build`/
+  `test_spec` functions directly — the same ones `swe_bench/harness.py:
+  process_entry` itself calls, not reimplemented. Validated incrementally:
+  (1) `real_verify_fn` against the instance's own gold `patch` (mirroring
+  this project's `reference_solution` discipline) — `PASS_TO_PASS` 13/13
+  passed, `FAIL_TO_PASS` both passed, and an empty-diff negative control
+  correctly failed; (2) `real_agent_fn` against the real vLLM model — one
+  real trajectory, real usage recorded, no crash; (3) `S0SweBench.solve()`
+  fully end-to-end — the model didn't actually fix the bug (no tool use,
+  same pattern as every other real run this session), and the pipeline
+  **correctly determined this**: a real, correct unresolved verdict, not
+  just "didn't crash."
+- **Four more real bugs found and fixed, each caught by running it, not by
+  re-reading the design.** `make_test_spec` needs a `hints_text` key
+  (confirmed "Unused" in swebench's own source, fixed with a placeholder,
+  not added to `SweBenchInstance`). A missing `pip install -r
+  requirements.txt` step inside the agent's container produced an
+  immediate `ModuleNotFoundError`. Bash treats `test_separable[compound_
+  model0-result0]`-style test IDs as glob patterns unless the shell sets
+  `-f` first — silently mangled them otherwise. **The significant one**: a
+  real correction to this entry's own earlier claim — "`PASS_TO_PASS` never
+  needs `test_patch`" was wrong. Confirmed directly: collecting
+  `test_separable.py` at `base_commit` found 11 tests without `test_patch`,
+  15 with it — some `PASS_TO_PASS` entries are themselves new test_patch-
+  introduced cases that happen to already pass pre-fix. The real rule:
+  PASS_TO_PASS means "passes regardless of the fix, *given* `test_patch`
+  is applied," not "doesn't need it." Oracle-safety holds a different way
+  than assumed: `test_patch` is applied only inside the separate
+  verify-only container, never the agent's own, and only a filtered pass/
+  fail signal reaches the caller.
+  Full write-up, including the still-open, explicitly-flagged
+  simplifications (coarse exit-code pass/fail rather than per-test-node
+  parsing; the agent's diff carries harmless environment-setup noise
+  inherited from HGM's own harness), in `docs/DECISIONS.md` D-40.
+- **`SStarSweBench` run for real too, right after `S0`'s success**: 2 real
+  trajectories (`max_candidates=2`), both correctly tagged
+  (`single_call`×2, `execution_feedback`×2, `self_consistency`×1), correct
+  summed usage across both, both candidates passed `PASS_TO_PASS` and the
+  final `FAIL_TO_PASS` check correctly confirmed the instance is still
+  unresolved — agreeing with `S0`'s own verdict on the same instance.
+  Best-of-N, execution feedback, self-consistency, and multi-trajectory
+  budget accounting are all now confirmed against real infrastructure, not
+  just synthetic tests. **One honest gap, stated plainly**: neither
+  candidate actually failed its `PASS_TO_PASS` check, so the *repair*
+  branch itself (a real failure triggering a real augmented-prompt retry)
+  hasn't been observed in a live run — assessed as low risk (the repair
+  prompt logic is pure Python already unit-tested, and re-running `agent_fn`
+  with a different string is the same code path as the first call) but not
+  claimed as covered.
 
 Everything reachable *without a host* has been built: the full measurement
 layer, validated end-to-end against a deterministic mock model and against

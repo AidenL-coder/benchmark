@@ -24,6 +24,9 @@ analysis = ["numpy>=1.26", "pandas>=2.0", "matplotlib>=3.8"]
 # directly for float-tolerant assertions (data/vendored/{humanevalplus,mbppplus}
 # /ATTRIBUTION.md); every other family needs nothing beyond the core deps.
 evalplus = ["numpy>=1.24"]
+# The swebench task representation (cbs.tasks.swebench, D-40) loads
+# princeton-nlp/SWE-bench_Verified directly from HuggingFace.
+swebench = ["datasets>=2.14"]
 dev = ["pytest>=8.0", "pytest-timeout>=2.3", "numpy>=1.24"]
 
 [project.scripts]

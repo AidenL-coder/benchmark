@@ -72,12 +72,14 @@ import urllib.request
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from cbs.budget import Usage
 from cbs.scaffolds.tagging import OperationTrace
 
 __all__ = [
     "ProxiedCall",
     "ModelCallProxy",
     "reconstruct_trace_from_events",
+    "usage_from_events",
 ]
 
 #: How long `reset()`/`stop()` will wait for in-flight handler threads to
@@ -352,3 +354,38 @@ def reconstruct_trace_from_events(events: list[ProxiedCall]) -> OperationTrace:
         prev_len += 1
 
     return trace
+
+
+def usage_from_events(events: list[ProxiedCall]) -> Usage:
+    """Sum real token/call usage from a proxy's captured events (D-40).
+
+    The gap D-40 identified between "S0/S_star's compute already generalizes
+    to a multi-round agentic trajectory" and "actually charged to
+    `cbs.budget`": a `ModelCallProxy` already captures every raw
+    request/response pair, and a real successful response's `response_body`
+    already carries a standard `usage: {prompt_tokens, completion_tokens,
+    ...}` field (confirmed against a real captured trace, not assumed from
+    the OpenAI API spec) -- so turning captured events into a chargeable
+    `Usage` needs no new interception, just reading a field already there.
+
+    Applies the same success filter as `reconstruct_trace_from_events`, for
+    the same reason: a failed call attempt never sampled from `M` and must
+    not inflate charged compute. A missing/malformed `usage` field on an
+    otherwise-successful call counts as zero tokens for that call (the call
+    itself still counts) rather than raising -- incomplete token accounting
+    on a real response is a possibility to degrade gracefully on, not a
+    reason to crash the whole charge.
+    """
+    total = Usage()
+    for event in events:
+        if not (200 <= event.status < 300):
+            continue  # a failed call attempt is not a sample from M
+        if not event.response_body.get("choices"):
+            continue  # 2xx with no choices is not a real generation either
+        usage_field = event.response_body.get("usage") or {}
+        total = total + Usage(
+            calls=1,
+            prompt_tokens=int(usage_field.get("prompt_tokens", 0) or 0),
+            completion_tokens=int(usage_field.get("completion_tokens", 0) or 0),
+        )
+    return total

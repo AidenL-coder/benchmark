@@ -18,44 +18,60 @@ Specs: [`docs/self-improving-agents-proposal.md`](docs/self-improving-agents-pro
 | Phase | Scope | State |
 |---|---|---|
 | 0 | Environment, config, model/sandbox/budget layers | **done** |
-| 1 | Task schema, verifier, frozen hashed splits: toy, HumanEval(+), MBPP(+), transfer_reasoning | **done** — 6 families, all "+" upgrades complete (D-34/D-35). LiveCodeBench scoped-not-started (D-33); SWE-bench Verified still open (D-13) |
+| 1 | Task schema, verifier, frozen hashed splits: toy, HumanEval(+), MBPP(+), transfer_reasoning | **done** — 6 `Task`-shaped families, all "+" upgrades complete (D-34/D-35). LiveCodeBench scoped-not-started (D-33). SWE-bench Verified deliberately uses a separate, non-`Task` representation instead (`cbs.tasks.swebench`, D-40) — see Phase 4/5 |
 | 2 | Frontier estimation + estimator validation | **done — DoD met** |
-| 3 | `S0` / `S_star` baselines, matched-compute harness, elicitation control | **done** |
-| 4 | `S_evo` measurement layer (interception-based tagging, archive, ablation, network-layer proxy bridge) | measurement layer **done** (D-24/D-25, D-38's `cbs.scaffolds.fork_bridge`); a real GPU+Docker host was proven working end-to-end once (D-37) then intentionally terminated after the smoke test — running it for real again needs a host re-provisioned |
-| 5 | Crossing test and ablations | determination logic **done** (`cbs.crossing`); running it for real needs the same host as Phase 4 |
+| 3 | `S0` / `S_star` baselines, matched-compute harness, elicitation control | **done** for the `Task`-shaped families; SWE-bench Verified variants (`S0SweBench`/`SStarSweBench`, D-40) also **done and real-execution-verified** — both run end-to-end against a real instance with a real vLLM model, producing correct resolved/unresolved verdicts |
+| 4 | `S_evo` measurement layer (interception-based tagging, archive, ablation, network-layer proxy bridge) | measurement layer **done** (D-24/D-25, D-38's `cbs.scaffolds.fork_bridge`); a GPU+Docker host has now been proven working end-to-end twice, across two separate provisionings (D-37, then again this session) — the underlying interception/proxy/budget machinery is proven against real Docker+model infrastructure via HGM, HyperAgents (D-38/D-39), and SWE-bench Verified (D-40); *running an actual self-improving loop* (not just the frozen baseline agent) has still not happened |
+| 5 | Crossing test and ablations | determination logic **done** (`cbs.crossing`); running it against a real evolved scaffold's results has still not happened |
 | 6 | Analysis and write-up | statistical plan pieces (bootstrap CIs, BH correction) and interpretation-matrix placement **done** (`cbs.stats`, `cbs.interpretation`); write-up itself needs real results |
 
 ---
 
-## Phase 4 needs a re-provisioned host, not more code or open decisions
+## Phase 4/5's remaining piece is a real evolving loop, not infrastructure
 
 `S_evo`'s measurement layer (interception-based support tagging, archive
 persistence, ablation) is built and tested — see DECISIONS.md D-24 through
 D-26. Running a real forked self-improvement loop means executing
 self-modifying orchestration code with live network access to a model
 endpoint, which brief §10 requires Docker for; neither this machine (no
-Docker) nor Colab (containers can't nest Docker) can provide that boundary.
+Docker) nor Colab (containers can't nest Docker) can provide that boundary,
+so this all runs on a rented GPU+Docker host, provisioned and torn down
+between sessions as needed (D-37).
 
-**D-23 is resolved (D-37)**: a real Docker+GPU host (Lambda Labs, 1x A10) was
-provisioned and proven working end-to-end — HGM cloned, vLLM serving
-`Qwen2.5-Coder-7B-Instruct` with tool-calling, a real containerized agent run
-that reached the model and got a genuine response. That instance has since
-been **intentionally terminated** by the user (cost management, not a
-failure) — its persistent filesystem (with the working `hgm`/`cbs_pkg`
-checkout) survives if reattached, but local disk (Docker images, cached
-weights) does not. Running Phase 4/5 for real needs a host re-provisioned the
-same way, not new infrastructure design.
+**D-12/D-31 (which fork, how tasks meet its agent) are confirmed**:
+`metauto-ai/HGM` as primary `S_evo`, `facebookresearch/HyperAgents` as a
+second independently-implemented variant (its own CC-BY-NC-SA-licensed
+module, kept separate from `cbs`), `jennyzzt/dgm` retained only as a
+literature-baseline reference; `S_evo` evolves natively against HGM's own
+SWE-bench Verified/Polyglot harnesses (D-31's option (b)), not adapted
+`cbs` task families.
 
-**D-12 (which fork) and D-31 (how tasks meet the fork's agent) are both
-confirmed** (2026-08-04): `metauto-ai/HGM` as primary `S_evo`,
-`facebookresearch/HyperAgents` as a second independently-implemented variant
-(kept in its own CC-BY-NC-SA-licensed module), `jennyzzt/dgm` retained only
-as a literature-baseline reference; task integration is D-31's option (b) —
-`S_evo` evolves natively against HGM's own SWE-bench Verified/Polyglot
-harnesses rather than adapting `cbs`'s own task families. Neither fork is
-cloned into this repo yet, and the SWE-bench Verified wrapper for `S0`/`S_star`
-is unbuilt — real engineering work for once a host exists again, not open
-questions. See `docs/DECISIONS.md` D-12/D-31/D-37/D-38 for the full detail.
+**Both forks' Docker/model integration is now execution-verified against a
+real host, not just planned** (D-37/D-38/D-39): HGM's polyglot harness runs
+real tasks against a real vLLM-served model end to end; HyperAgents needed
+(and now has) its own `litellm`-based local-endpoint patch, a
+`network_mode="host"` fix, and a real ~600-second-hang root cause fixed
+(an eval-index suffix corrupting its model string) before its own harness
+also ran real tasks end to end.
+
+**`S0`/`S_star` on SWE-bench Verified are done too, and also
+execution-verified** (D-40): `cbs.tasks.swebench` (a deliberately
+non-`Task` representation — a repo-plus-diff problem doesn't fit
+`Task`/`TaskSuite`'s prompt-plus-code-string shape), `cbs.scaffolds.
+swebench_scaffold.S0SweBench`/`SStarSweBench` (unit-tested against
+synthetic fakes), and `scripts/swebench_glue.py` (the real Docker/HGM glue)
+have all been run for real against a real SWE-bench Verified instance,
+producing correct resolved/unresolved verdicts for both scaffolds. See
+`docs/DECISIONS.md` D-40 for the full validation trail, including four real
+bugs found and fixed along the way and the honestly-flagged remaining gaps
+(coarse pytest-exit-code pass/fail rather than per-test-node parsing; the
+repair branch itself not yet observed in a live run).
+
+**What's actually left for Phase 4/5**: forking HGM/HyperAgents into a real,
+running self-improvement loop and observing whether it crosses the
+frontier — the measurement instrument itself is now built and proven
+against real infrastructure end to end, for both the frozen baseline agent
+and the SWE-bench Verified substrate `S_evo` will run on.
 
 ---
 
@@ -131,9 +147,12 @@ hidden tests and near-certain pretraining contamination — documented in each
 family's `ATTRIBUTION.md` and DECISIONS.md D-27/D-29/D-30/D-34/D-35: fine for
 instrument validation, not a real capability claim on their own; prefer the
 "+" variants for that. LiveCodeBench (investigated and scoped as a materially
-bigger change, D-33) remains out of scope. SWE-bench Verified is not yet
-built but is now confirmed **load-bearing** rather than optional (D-13, per
-D-12/D-31) — it's the substrate `S_evo` will evolve against natively.
+bigger change, D-33) remains out of scope. SWE-bench Verified is
+**load-bearing rather than optional** (D-13, per D-12/D-31) — it's the
+substrate `S_evo` will evolve against natively — and, via its own
+deliberately-separate `cbs.tasks.swebench` representation (not this
+family list), is now built and real-execution-verified for `S0`/`S_star`
+(D-40, see "What is actually novel here" below).
 
 **`S_star`** (`cbs.scaffolds.s_star`) — the strong fixed baseline (brief §4):
 best-of-N, execution feedback, tool use (a static compile check), and
@@ -167,7 +186,22 @@ the same logic: `disabled_ops` blocks the information channel itself, so an
 tries to do, not just reconfigured and hoped to comply. `cbs.archive` computes
 the overfitting gap and transfer retention (brief §9.1) and a crude
 hard-coding triage heuristic. None of this requires running real
-self-modifying code — see the Phase 4 note below for why that part is blocked.
+self-modifying code — see the Phase 4 note below for what's still needed
+for that.
+
+**`S0`/`S_star` on SWE-bench Verified** (`cbs.tasks.swebench`,
+`cbs.scaffolds.swebench_scaffold`, `scripts/swebench_glue.py`, D-40) — a
+repo-plus-diff problem doesn't fit `Task`/`TaskSuite`'s prompt-plus-code-
+string shape, so this is a deliberately separate, non-`Task` measurement
+path rather than a forced-fit loader. `S0SweBench` generalizes "one call to
+`M`" to "one full agent trajectory" (the natural atomic unit once solving
+requires real tool use, not a blind completion); `SStarSweBench` adds
+best-of-N, execution feedback (against `PASS_TO_PASS`, never
+`FAIL_TO_PASS` — the same public/hidden split `Task.public_tests`/`tests`
+already enforce), and self-consistency across trajectories. Both run
+end-to-end against real Docker infrastructure and a real vLLM-served
+model, producing correct resolved/unresolved verdicts — not just
+unit-tested against synthetic fakes, though that validation exists too.
 
 ---
 
