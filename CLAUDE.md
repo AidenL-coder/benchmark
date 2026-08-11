@@ -97,6 +97,51 @@ second stop after this file.
 
 ## 3. What's actually blocked, and why
 
+> **READ THIS FIRST — the blocker changed on 2026-08-07 and is no longer
+> engineering.** Everything below about infrastructure, forks, and
+> measurement plumbing remains true and remains solved. But the first
+> at-scale real measurement (D-44) found that the chosen frozen model,
+> `Qwen2.5-Coder-7B-Instruct`, produces **zero agentic behaviour** under the
+> unmodified agent's own `tool_choice="auto"` default: across the full
+> Polyglot baseline subset it resolved **0 tasks, made 0 tool calls, and
+> returned an empty patch every single time**, uniformly across all six
+> languages. It writes a competent analysis of the problem and then stops.
+> Since `S0` is what *defines* the frontier, `S0 = 0` makes the frontier
+> degenerate and the whole crossing test uninformative — and it is also the
+> mechanical reason D-41's `expand()` crash exists (every archive node sits
+> at `mean_utility == 0`, so the positive-utility filter is *always* empty).
+> **Do not spend GPU-hours on an evolutionary run until a base model with
+> real dynamic range is confirmed.** 14B and 32B AWQ are staged and fit the
+> existing A10 at no extra GPU cost; the task-matched comparison is the next
+> step. Full detail in `docs/DECISIONS.md` D-44, including the one-line
+> `tool_choice="required"` contrast (D-38) that turns the same model from
+> no-action-at-all into a 64-round near-solve — a real elicitation finding,
+> but explicitly *not* a crossing result.
+>
+> **Update 2026-08-10/11 — the project's near-term goal changed (D-45) and
+> the sub-study is most of the way through.** The target is now a **NeurIPS
+> 2026 workshop paper** ("Managing Agents that Manage Agents", deadline
+> **2026-08-29**, non-archival so the main track is unaffected; NeurIPS 2026's
+> own main-track deadline has already passed, so that is a 2027 target).
+> Scope is deliberately cut to *instrument + D-44 result* — no evolutionary
+> run, no seeds, no second fork, no SWE-bench. Draft lives in
+> `paper/workshop_paper.tex`; `scripts/analyze_scaffold_sensitivity.py`
+> regenerates its tables (and their LaTeX) from the results files.
+> A 2×2 (`{7B,14B}` × `{auto,required}`) was **declared in
+> `preregistration.md` §4.1 before being run**, with explicit falsifiable
+> predictions. Interim results at n=42 of the `7B × required` arm:
+> **42/42 tasks used tools vs 0/59 in `auto`** (Fisher $p\approx4\times
+> 10^{-13}$, disjoint CIs), **1 task resolved vs 0** — the behavioural effect
+> is overwhelming, the pass-rate effect is *not* statistically resolvable at
+> this n (would need ≈6/59) and **must not be claimed as one**. The sharp,
+> honest point is that 0→1 resolved is statistically negligible but
+> algorithmically decisive, since it is exactly the boundary at which
+> `expand()`'s positive-utility filter stops being empty. Two real
+> data-quality traps found and handled: D-43 (infra failures reported
+> identically to model failures) and `patch_len` being dominated by build
+> artifacts once the agent actually builds (one Rust "patch" was 2.97M chars,
+> 3 real files of 1,935).
+
 **D-23 is resolved as of this session — read this before assuming infra is
 still the blocker.** A real Docker+GPU host now exists and has been proven
 working end-to-end (D-37 in `docs/DECISIONS.md` has the full write-up, and

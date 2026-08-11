@@ -15,6 +15,9 @@ injected function instead of two).
 from __future__ import annotations
 
 import json
+import os
+import shutil
+import stat
 import sys
 from pathlib import Path
 
@@ -32,12 +35,58 @@ from cbs.scaffolds.polyglot_scaffold import PolyglotRunResult
 from cbs.scaffolds.tagging import OperationTrace
 from cbs.tasks.polyglot import PolyglotInstance
 
-#: The frozen agent variant used throughout this session (D-38/D-39/D-40) --
-#: keep using the same one here, not hgm's own top-level coding_agent.py.
-AGENT_SRC = "measured_default_agent/src"
+#: The frozen agent variant (D-38/D-39/D-40) -- not hgm's own top-level
+#: coding_agent.py.
+#:
+#: Overridable via the CBS_AGENT_SRC environment variable so the
+#: scaffold-sensitivity sub-study's two arms (preregistration.md §4.1) run
+#: through *identical* code with only the agent directory swapped -- no
+#: source edit between arms, which is what makes the comparison clean.
+#: `toolcheck_agent_src/` differs from the default in exactly two lines,
+#: both the `tool_choice` flag; verified by `diff`, not asserted.
+AGENT_SRC = os.environ.get("CBS_AGENT_SRC", "measured_default_agent/src")
 PROXY_PORT = 8000
 VLLM_BACKEND = "http://127.0.0.1:8001"
 LLM_MODEL_STRING = "vllm-model:localhost"
+
+#: Where HGM's own `build_image` stages a per-task Docker build context.
+BUILD_CONTEXT_ROOT = Path("logs/build_images/instances")
+
+
+def _clear_stale_build_context(instance_id: str) -> None:
+    """Remove any leftover Docker build-context staging for this task.
+
+    **A real bug this fixes, found by running the 59-task batch (D-43)**, not
+    a defensive nicety: HGM's `build_image` stages the build context by
+    `shutil.copytree`-ing the exercise repo (including its `.git/`) into
+    `logs/build_images/instances/<image_name>/`. Git object files are created
+    **read-only** (mode 0444). On a *persistent* filesystem -- exactly this
+    project's setup, where `/lambda/nfs/cbs-project` survives instance
+    termination -- a staging directory left behind by an earlier session
+    still holds those read-only objects, and the next run's `copytree` dies
+    with `[Errno 13] Permission denied` trying to overwrite them.
+
+    That failure is silently swallowed by `process_entry`'s own broad
+    `except`, which sets `eval_result = "incomplete"` -- i.e. an
+    infrastructure error is indistinguishable, in the result dict, from a
+    task the model genuinely failed. Left unfixed it would have quietly
+    depressed the measured baseline pass rate, which is precisely the number
+    this batch exists to establish.
+
+    Clearing the staging directory (regenerable build context, never source
+    data) before each task removes the collision at its source rather than
+    retrying around it. `onerror` restores write permission so the read-only
+    git objects can actually be unlinked.
+    """
+    staging = BUILD_CONTEXT_ROOT / f"pb.eval.x86_64.{instance_id}__latest"
+    if not staging.exists():
+        return
+
+    def _force_writable(func, path, exc_info):
+        Path(path).chmod(stat.S_IWRITE | stat.S_IREAD)
+        func(path)
+
+    shutil.rmtree(staging, onerror=_force_writable)
 
 
 def real_agent_fn(
@@ -66,6 +115,11 @@ def real_agent_fn(
     # Module-level global, not a process_entry parameter -- same gotcha
     # documented in hgm_run_task_with_interception.py (D-38).
     polyglot_harness.llm = LLM_MODEL_STRING
+
+    # Must happen before build_env_images/process_entry touch the staging
+    # directory -- see _clear_stale_build_context for the real failure this
+    # prevents (D-43).
+    _clear_stale_build_context(instance.instance_id)
 
     proxy = ModelCallProxy(PROXY_PORT, VLLM_BACKEND)
     proxy.start()

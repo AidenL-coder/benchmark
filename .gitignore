@@ -24,3 +24,8 @@ data/cache/
 # Local overrides
 configs/local/
 .env
+
+# Raw per-task run logs from Polyglot arms (D-44/D-45) -- tens of MB of
+# container/pip output. The per-arm results JSON in results/ is the actual
+# evidence and IS tracked; these are kept locally for forensics only.
+results/logs/

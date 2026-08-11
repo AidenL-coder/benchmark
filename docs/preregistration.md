@@ -174,6 +174,59 @@ posture as `N_max`.
   `data/splits/mbppplus.json` (173 train / 201 held-out),
   `data/splits/transfer_reasoning.json` (10 transfer).
 
+### 4.1 Scaffold-sensitivity sub-study — arms declared 2026-08-10, **before** running them
+
+Recorded here *before* the corresponding runs execute, so the choice cannot
+be rationalised after seeing which configuration produces more favourable
+numbers. This is the discipline §3's locked thresholds already follow,
+applied to a design decision §4 legitimately still leaves open.
+
+**Why this sub-study exists (the prompting observation, already collected):**
+`S0Polyglot` on HGM's own 59-task Polyglot baseline subset, with frozen
+`Qwen2.5-Coder-7B-Instruct` under the unmodified agent's own
+`tool_choice="auto"` default, returned **0/59 resolved, 0 tool calls, 59/59
+`empty_patch`**, uniform across all six languages (D-44). The model writes a
+competent analysis and stops without ever editing a file. Since `S0` is what
+*defines* the frontier, `S0 = 0` makes the frontier degenerate and the
+crossing test uninformative. That result is complete and is **not** re-run
+or revised by anything below.
+
+**Declared arms** — a 2×2 over the same frozen 59-task set, single
+manipulated variable per axis:
+
+| Axis | Levels |
+|---|---|
+| Base model | `Qwen2.5-Coder-7B-Instruct` · `Qwen2.5-Coder-14B-Instruct-AWQ` |
+| Agent tool policy | `tool_choice="auto"` (unmodified) · `tool_choice="required"` |
+
+**Manipulation is verified minimal, not asserted:** `toolcheck_agent_src/`
+differs from the canonical `measured_default_agent/src/` in exactly two
+lines, both the `tool_choice` flag (`diff -rq` confirms one differing file;
+`diff` confirms two differing lines). The canonical frozen baseline is never
+edited.
+
+**Declared predictions, before the fact:**
+1. `7B × required` will show substantially more tool use than
+   `7B × auto` (a single real trajectory at n=1, D-38, showed 64 rounds and
+   a near-solve; this arm tests whether that generalises across 59 tasks).
+2. `14B × auto` will show non-zero tool use, i.e. the floor is a capability
+   threshold rather than a property of the scaffold alone. **If `14B × auto`
+   is also 0/59 with zero tool calls, that prediction is wrong and will be
+   reported as wrong**, and the interpretation shifts to the scaffold's
+   default policy being unusable below frontier-model scale.
+3. No prediction is registered about absolute resolve rates in any arm.
+
+**Model-choice rationale, recorded now:** the move from 7B toward a larger
+model is motivated *solely* by the pre-existing floor result above, decided
+before any 14B measurement was taken. Quantisation (AWQ) is used because it
+fits the existing 24GB A10 at no additional hardware cost; it does not
+weaken the frozen-model claim (D-01/D-03) — weights remain fixed,
+self-hosted, and hashable — but it is stated rather than hidden.
+
+**Scope limit:** this sub-study is a scaffold-sensitivity measurement on
+`S0` only. It is **not** a frontier-crossing result, does not involve
+`S_evo`, and must not be presented as either.
+
 ---
 
 ## 5. Primary and secondary outcomes

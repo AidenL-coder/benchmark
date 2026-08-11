@@ -1203,6 +1203,78 @@ paper posted the week before submission could still land in the gap).
 Treat this entry as "confidence materially improved three times now, not
 cleared" — same discipline as before, not a license to stop checking.
 
+**Update, 2026-08-06 — an informal recency sweep (plain web search, not the
+Semantic Scholar citation-graph method above; treat as a lighter-weight
+check than the passes above, not a replacement for the "one more
+systematic pass before submission" this entry already calls for) surfaced
+two new papers in the gap, both close enough to read carefully before
+submission, neither read in full yet — abstracts/summaries only so far:**
+
+- **EvoAgentBench** (Gao et al., arXiv 2607.05202, submitted 2026-07-06) —
+  benchmarks agent self-evolution via "Ability Transfer": extracts
+  trace-grounded Abilities from agent executions, canonicalizes them, and
+  builds domain-specific Ability Graphs linking tasks with procedural
+  overlap, across four domains (web research, algorithmic reasoning,
+  software engineering, knowledge work). On the surface this is the
+  closest-sounding title found in any pass so far — worth a full-text read,
+  not just the abstract, before trusting the following read: its stated
+  question (does curated ability content transfer across model families
+  under an automatic method) is about *transfer efficiency of accumulated
+  procedures*, not this project's question (does the frozen model's own
+  reachable frontier move, decomposed from elicitation/overfitting, under
+  causally-verified attribution). No mention found of an independent
+  frozen-baseline ceiling estimate, matched-compute elicitation control, or
+  interception-based (vs. self-reported) operation tagging in what's been
+  read so far.
+- **SEA-Eval** (arXiv 2604.08988, v1 2026-04-10, v3 2026-05-24) — "the
+  first benchmark designed specifically for evaluating Self-Evolving
+  Agents," an "Evolutionary Flywheel" architecture, using success rate and
+  token consumption as primary metrics across sequential task streams, with
+  a headline finding that token cost varies up to 31.2× between frameworks
+  at matched success rate. This is adjacent on efficiency/cost-of-evolution
+  grounds, not on the elicitation-vs-expansion attribution question — no
+  mention found (abstract/summary level only) of frontier estimation,
+  preregistration, or causal ablation of specific operations.
+- Both are recent enough (April and July 2026) that neither could have
+  appeared in the Semantic Scholar citation-graph pass above, which is
+  exactly the kind of gap a field-moving-fast recency check is supposed to
+  catch. **Neither, on this pass, appears to close this project's specific
+  gap** — both are about different axes of "self-evolving agent
+  evaluation" (transfer efficiency; cost-of-evolution dynamics) than
+  elicitation-vs-genuine-expansion attribution under a frozen model — but
+  this is a lighter-weight check than the standard this entry otherwise
+  holds itself to, and both deserve a full-text read (not just
+  search-summary text) before the related-work section is finalized, ideally
+  as part of the "one more systematic pass" already called for above, not
+  instead of it.
+- Also confirmed, useful for D-12's own framing as much as novelty tracking:
+  **HGM is not just published but an ICLR 2026 *oral*** (top tier within an
+  already-selective venue), and DGM itself is an ICLR 2026 conference paper
+  — both now confirmed accepted, not just arXiv preprints, which raises
+  the bar for how sharply this project's related-work section needs to
+  differentiate from HGM's own claims specifically, since it is the
+  best-credentialed, most likely-to-be-known-by-reviewers prior work in
+  this exact space.
+
+**Update, 2026-08-10 — HGM's baseline structure verified against its own
+full text, not inferred.** Because the workshop paper (D-45) makes a claim
+about what prior work does *not* control for, the closest and most
+load-bearing case was checked directly rather than left as a general
+assertion. Read the full HTML of arXiv 2510.21614 specifically looking for
+(a) an independent frozen-backbone ceiling estimate via repeated sampling /
+pass@k / best-of-N, (b) a fixed hand-authored scaffold control at matched
+compute, (c) any explicit elicitation-vs-expansion distinction. Result:
+none of the three is present. HGM's evaluation compares **three
+evolutionary methods** (SICA, DGM, HGM) from an identical initial agent;
+its only human-engineered reference is a leaderboard comparison against
+SWE-agent, which uses a different backbone at an unmatched compute budget.
+So there is no condition anywhere in that paper where the frozen backbone
+is measured *without* an evolving scaffold. The gain is real; what it is a
+gain *over* is another moving scaffold, not a characterised model ceiling.
+This is now stated in the workshop paper's related-work section as a
+specific, checkable claim rather than a general one — which is both more
+useful to a reviewer and more falsifiable if wrong.
+
 ---
 
 ## D-37 — D-23 resolved: real Docker+GPU host provisioned, HGM+vLLM+Docker
@@ -2547,6 +2619,194 @@ a design question left unresolved.
 
 ---
 
+## D-43 — stale Docker build-context staging silently reported as task
+failure; found by the first at-scale batch run · **C**
+
+**Symptom**: the first real 59-task `S0Polyglot` batch returned
+`eval_result: "incomplete"` for its first task (`javascript__queen-attack`)
+after 721s — a task that had completed normally (`empty_patch`, 146s) on
+the *previous* instance days earlier.
+
+**Root cause, from the real Docker log, not guessed**: HGM's `build_image`
+stages a per-task Docker build context by `shutil.copytree`-ing the
+exercise repo — *including its `.git/` directory* — into
+`logs/build_images/instances/<image>/`. Git object files are created
+**read-only** (mode `0444`). Because `/lambda/nfs/cbs-project` is a
+*persistent* filesystem that survives instance termination, staging
+directories written by an earlier session were still present, still
+read-only, and the new run's `copytree` died with `[Errno 13] Permission
+denied` on every one of them.
+
+**Why it mattered far more than a slow first task**: `process_entry` wraps
+its whole body in a broad `except`, and sets `eval_result = "incomplete"`
+when the exception fires before grading. In the returned result dict, that
+is **indistinguishable from a task the model genuinely failed**. This batch
+exists specifically to establish the frozen model's baseline pass rate — an
+infrastructure error silently counted as a model failure would have
+depressed exactly the number being measured, in the direction that looks
+like a real finding. Caught only because `"incomplete"` was an
+`eval_result` value never seen before and got checked rather than assumed
+to be a normal failure mode.
+
+**Fixed in two places, deliberately:**
+1. `scripts/polyglot_glue.py` now clears the per-task staging directory
+   before each run (`_clear_stale_build_context`), with an `onerror` hook
+   that restores write permission so read-only git objects can actually be
+   unlinked. This removes the collision at its source rather than retrying
+   around it. Only regenerable build context is touched, never source data.
+2. The batch runner treats `"incomplete"`/`"error"` as infrastructure
+   failures: retries once, and — importantly — **excludes them from the
+   denominator** of the reported pass rate rather than counting them as
+   zeros, reporting them as a separate line instead.
+
+**Generalizes beyond Polyglot**: any harness that stages a git repo into a
+build context on a persistent filesystem has this bug latent. Worth
+checking `swebench_glue.py`'s path before its own at-scale run.
+
+---
+
+## D-44 — the frozen 7B baseline is at hard floor on Polyglot: 0 resolved,
+**zero tool calls**, every result an empty patch · **P (batch in progress)**
+
+**The measurement**: `S0Polyglot` across HGM's own 59-task Polyglot
+baseline subset (D-42: 59 unique, not 60), real Docker, real vLLM-served
+`Qwen/Qwen2.5-Coder-7B-Instruct`, the unmodified `measured_default_agent`
+under its own `tool_choice="auto"` default. As of 27/59 completed, the
+result is perfectly uniform across all six languages:
+
+> **0 resolved · 27 `empty_patch` · 0 `tool_call` operations · 0 errors**
+
+**Mechanism, confirmed from a real transcript rather than inferred**: the
+model is not failing at *coding*. Given `cpp__diamond` it produces a
+competent, well-structured natural-language analysis ("1. **Understand the
+Pattern**: The diamond starts with 'A' and increases in size until it
+reaches the given letter...") and then stops — `finish_reason='stop'`, no
+`tool_calls`. It never invokes `edit`/`bash`, so it never modifies a file,
+so `diff_versus_commit` yields an empty patch and the task auto-fails
+before any test runs. It behaves as a chat model, not an agent.
+
+This is the same behaviour D-38 flagged at n=9 and could not then
+distinguish from small-sample noise. At n=27 across 6 languages with zero
+variance, it is a property of this model-scaffold pair, not a fluke.
+
+**Why this is a serious problem for the study, stated plainly**: `S0` is
+what *defines* the frontier this instrument measures against. If `S0 = 0`,
+the frontier sits at zero, and every one of the brief's four
+frontier-crossing conditions degenerates — there is no task `S0` plausibly
+fails-but-could-solve, the frontier estimator has nothing to estimate, and
+any nonzero `S_evo` result would "cross" trivially. That is an
+*uninformative* null (the instrument could not have detected an effect),
+which is categorically weaker than a well-powered null (it could have, and
+didn't). It also explains D-41's crash mechanically: with every archive
+node at `mean_utility == 0`, `expand()`'s positive-utility filter is
+*always* empty, so that degenerate branch is not an edge case here — it is
+the expected path.
+
+**The genuinely interesting finding inside the problem**: D-38 established
+that forcing `tool_choice="required"` in an isolated agent copy produced a
+real 64-round tool-using trajectory with a substantive patch that passed
+most of the hidden suite. So a **one-line scaffold change** moves this
+model-scaffold pair from *no action at all* to *near-solve*. That is an
+enormous elicitation effect from a change that does nothing to the frozen
+model — which is this project's own central thesis, appearing unbidden in a
+validation run. It is not, however, a frontier-*crossing* result, and must
+not be presented as one.
+
+**Consequence for the experiment, not yet decided**: the frozen model
+almost certainly has to change before any evolutionary run is worth paying
+for. Constraint: the A10's 24GB. Quantized larger models fit at **no extra
+GPU cost** (the instance bills per hour regardless) — `Qwen2.5-Coder-14B-
+Instruct-AWQ` (~9GB, comfortable at 16k context) and
+`Qwen2.5-Coder-32B-Instruct-AWQ` (~19GB, tight) are both downloaded and
+staged. Quantization does not weaken the frozen-verifiability argument
+(D-01/D-03): the weights are still fixed, self-hosted, and hashable; it
+only needs stating.
+
+**Confirmed while planning the swap**: no agent reconfiguration is needed.
+`llm_withtools.py:62` resolves the served model dynamically
+(`client.models.list().data[0].id`) whenever the model string contains
+`vllm`, so the `"vllm-model:localhost"` string is model-agnostic and
+swapping what vLLM serves is transparent to the agent.
+
+**A hazard closed before it could bite**: results files did not record
+*which* model produced each row. Since the batch runner resumes from a
+checkpoint, stopping a run, swapping models, and resuming would have
+silently merged two models' results into one file with no way to separate
+them afterward — precisely the kind of quiet data corruption this project
+tries to design out. The subset runner now records the served model per
+result and warns loudly if a single file ever contains more than one.
+
+**Methodological caution recorded now, before results exist**: switching
+the agent to `tool_choice="required"` to make the numbers move would change
+the scaffold mid-study and confound exactly the comparison this instrument
+is built to make. Either a stronger model uses tools under the *unmodified*
+default, or auto-vs-required becomes an explicit, pre-registered
+experimental arm. `preregistration.md` §4 (models and task families) is
+still legitimately open (`[TO FIX]`), so choosing and *documenting* the
+model now is honest; changing it after seeing crossing results would not
+be.
+
+---
+
+## D-45 — target a NeurIPS 2026 workshop first, not the main track; venue
+chosen and paper scoped · **C**
+
+**Why the venue changed.** The stated ambition has been a strong main-track
+paper. Two facts make a workshop the correct *first* move rather than a
+consolation: NeurIPS 2026's main-track deadline (2026-05-06) has already
+passed, so the main track is a 2027 target regardless; and NeurIPS workshops
+are **non-archival**, explicitly welcome work in progress, and permit
+subsequent submission of the same work to an archival venue. Verified
+directly against NeurIPS's own 2026 handbook and workshop guidance — dual
+submission to non-archival workshops is permitted, and reviewers are
+instructed not to reference a workshop version. So the workshop costs
+nothing at the main track later and buys expert feedback before the
+expensive experiment is committed to.
+
+**Venue chosen: "Managing Agents that Manage Agents: Responsible Use of
+Meta-Agents"** (NeurIPS 2026, deadline 2026-08-29 AoE, non-archival, 9-page
+full / 4-page short). Selected over two same-deadline alternatives
+("Evaluation of Interactive Agents"; "Who Verifies the Agents?") because
+four of its six stated topics map directly onto work already built:
+automated design/discovery of agent harnesses *and when they generalise
+beyond tuning tasks* (the overfitting-gap machinery); self-improvement and
+open-ended evolution (HGM/HyperAgents); **evaluation and benchmarks for
+meta-agents — "tests determining whether improved agents genuinely
+generalise"** (a near-verbatim restatement of this project's thesis); and
+misalignment/safety via observable execution (the interception-based
+tagging, which exists precisely because an evolved scaffold cannot be
+trusted to self-report). The runner-up's emphasis on user simulators and
+user-facing interactive systems is a materially worse fit.
+
+**Scope deliberately cut to fit.** The workshop paper is the instrument plus
+the D-44 scaffold-sensitivity result. It explicitly **excludes** the full
+evolutionary run, multiple seeds, both forks, and SWE-bench Verified — those
+are the main-track contribution, and attempting them now would miss the
+deadline for no gain. Estimated compute for what *is* in scope is ~$50 on
+the existing A10, versus ~$2,000 for the full main-track study.
+
+**Draft lives in `paper/workshop_paper.tex`** (+ `paper/refs.bib`), written
+against the NeurIPS style, with every not-yet-measured number wrapped in a
+`\todoresult{}` macro so no placeholder can survive to submission
+unnoticed. `scripts/analyze_scaffold_sensitivity.py` regenerates the main
+table (including its LaTeX form) directly from the per-arm results files,
+so the paper's numbers are reproducible rather than transcribed.
+
+**One framing decision recorded here because it is load-bearing and could
+otherwise look like spin.** If the `required` arm ends at the same resolve
+rate as `auto` (both zero), the result is *not* "scaffold change produces
+capability gain" — it plainly does not. The correct and more interesting
+claim is that two scaffolds differing by two lines produce enormous
+*behavioural* divergence (no actions at all vs. tens of tool calls and real
+graded patches) while receiving *identical* utility under a pass-rate
+objective. That makes the most consequential scaffold property invisible to
+the very signal DGM/HGM/SICA all select on — and it is mechanically why
+D-41's `argmax` crash exists, since the positive-utility filter is always
+empty in this regime. This framing must not be swapped for the stronger
+"capability gain" claim if the data does not support it.
+
+---
+
 ## Still open
 
 | # | Decision | Status | Needed by |
@@ -2567,12 +2827,17 @@ a design question left unresolved.
 | D-41 | ~~Root-cause + fix `expand()`'s empty-argmax crash (D-37)~~ — **done, 2026-08-06**: real trigger identified from source (every archive node at `mean_utility == 0`, not "too few tasks"); `hgm.py`'s `expand()` patched to fall back to all evaluated nodes rather than crash; fix validated crash-free at both 1-task and 60-task-scale analogues, and provably inert in the normal case, via `scripts/verify_hgm_ts_sample_fix.py` — no real GPU/Docker spend needed | **C** | — |
 | D-42 | ~~`S0` on the Polyglot benchmark~~ — **done and real-execution-verified, 2026-08-06**: `cbs.tasks.polyglot`/`cbs.scaffolds.polyglot_scaffold.S0Polyglot`/`scripts/polyglot_glue.py` built and run fully end-to-end for real (real vLLM model, real Docker/HGM harness); completes Phase 3's coverage of D-31's other confirmed native substrate. `SStarPolyglot` deliberately not built yet — no execution-feedback hook exists without the same container-splitting surgery D-40 did for SWE-bench Verified | **C** | — |
 
+| D-43 | ~~Stale Docker build-context staging reported as task failure~~ — **fixed, 2026-08-07**: read-only git objects left on the persistent filesystem broke `copytree`, and `process_entry` reported the resulting exception identically to a genuine model failure. Cleared at source in `polyglot_glue.py`; infra failures now excluded from the pass-rate denominator | **C** | — |
+| D-44 | **The frozen 7B is at hard floor on Polyglot** — **complete at n=59**: 0 resolved, 0 tool calls, 59/59 `empty_patch`, every task exactly one generation then stop (mean 902 completion tokens). `S0 = 0` makes the frontier degenerate and the crossing test uninformative. 2×2 scaffold-sensitivity sub-study declared (preregistration §4.1) and running; `7B × required` shows the regime change clearly so far (tens of tool calls/task, real graded patches) | **P** | before any `S_evo` run |
+| D-45 | ~~Publication venue and scope~~ — **decided, 2026-08-10**: NeurIPS 2026 "Managing Agents that Manage Agents" workshop (2026-08-29, non-archival), instrument + D-44 result, explicitly excluding the evolutionary run/seeds/second fork/SWE-bench. Main track is a 2027 target since NeurIPS 2026's own deadline has passed | **C** | — |
+
 D-14 is now locked in `preregistration.md` and must not be revisited after
 seeing results. D-23 is resolved (D-37); D-37's own remaining crash is now
 also resolved (D-41); D-12/D-31 are confirmed but not yet built, though
 Phase 3's `S0` now covers both of D-31's confirmed substrates for real
-(D-40/D-42). The practical blocker on actually *running* Phase 4/5 is now
-real engineering work (forking HGM+HyperAgents for real, building
-`SStarPolyglot`'s container-splitting surgery) plus the deliberate decision
-of when to actually start the real loop, not any remaining open decision or
-unresolved bug.
+(D-40/D-42). **The practical blocker on Phase 4/5 has changed as of D-44**:
+it is no longer primarily engineering or an open decision, but an empirical
+one — the frozen model as currently chosen produces no agentic behaviour at
+all, so there is nothing for an evolutionary run to improve *on*. Resolving
+D-44 (a base model with real dynamic range under the unmodified scaffold)
+now gates everything downstream.
