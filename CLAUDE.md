@@ -127,20 +127,36 @@ second stop after this file.
 > run, no seeds, no second fork, no SWE-bench. Draft lives in
 > `paper/workshop_paper.tex`; `scripts/analyze_scaffold_sensitivity.py`
 > regenerates its tables (and their LaTeX) from the results files.
-> A 2×2 (`{7B,14B}` × `{auto,required}`) was **declared in
-> `preregistration.md` §4.1 before being run**, with explicit falsifiable
-> predictions. Interim results at n=42 of the `7B × required` arm:
-> **42/42 tasks used tools vs 0/59 in `auto`** (Fisher $p\approx4\times
-> 10^{-13}$, disjoint CIs), **1 task resolved vs 0** — the behavioural effect
-> is overwhelming, the pass-rate effect is *not* statistically resolvable at
-> this n (would need ≈6/59) and **must not be claimed as one**. The sharp,
-> honest point is that 0→1 resolved is statistically negligible but
-> algorithmically decisive, since it is exactly the boundary at which
-> `expand()`'s positive-utility filter stops being empty. Two real
-> data-quality traps found and handled: D-43 (infra failures reported
-> identically to model failures) and `patch_len` being dominated by build
-> artifacts once the agent actually builds (one Rust "patch" was 2.97M chars,
-> 3 real files of 1,935).
+> **The 2×2 is COMPLETE — all four arms at n=59 each** (`{7B,14B}` ×
+> `{auto,required}`), declared in `preregistration.md` §4.1 **before** being
+> run with explicit falsifiable predictions, outcomes scored in §4.2.
+> Per-arm results are committed under `results/*.json` (raw logs are
+> gitignored under `results/logs/`):
+>
+> | Arm | Resolved | Used tools | Tool calls | Generations |
+> |---|---|---|---|---|
+> | 7B × `auto` | 0/59 | 0/59 | 0 | 59 |
+> | 7B × `required` | 2/59 | 59/59 | 3663 | 3687 |
+> | 14B × `auto` | 0/59 | 0/59 | 0 | 59 |
+> | 14B × `required` | 4/59 | 59/59 | 5592 | 5617 |
+>
+> **Tool policy → behaviour: Fisher p = 3.4e-13 at *both* scales. Model scale
+> → behaviour: p = 1.0 (14B `auto` is identical to 7B `auto` in every cell,
+> falsifying registered prediction 2). Resolve rate: never significant
+> (p = 0.50, 0.12) and must not be claimed.** The sharp honest point: 0→2
+> resolved is statistically negligible but *algorithmically* decisive, since
+> it is exactly the boundary at which `expand()`'s positive-utility filter
+> stops being empty (D-41).
+>
+> Three real data-quality traps found and handled, all documented:
+> **D-43** (infra failures reported identically to model failures);
+> `patch_len` dominated by build artifacts once the agent actually builds
+> (one Rust "patch" was 2.97M chars, 3 real files of 1,935); and **D-46** —
+> 9 rows where the agent used tools but wrote a *new file of its own naming*,
+> often in the wrong language (`diamond_kata.py` for `cpp__diamond`), leaving
+> nothing gradeable. That last one required a denominator correction made
+> **against our own interest**: counting them as unresolved gives 4/59 = 6.8%
+> rather than the flattering 4/50 = 8.0%.
 
 **D-23 is resolved as of this session — read this before assuming infra is
 still the blocker.** A real Docker+GPU host now exists and has been proven
