@@ -2807,6 +2807,59 @@ empty in this regime. This framing must not be swapped for the stronger
 
 ---
 
+## D-46 — a third agent failure mode ("acts on the wrong artifact"), and a
+denominator correction made against our own interest · **C**
+
+**Found by**: 9 of 59 tasks in the `14B × required` arm returned HGM's
+`error` marker — a rate seen in no other arm (0/59 in all three others).
+
+**Root cause, from the real container logs, not inferred.** The failing
+sequence is always identical:
+
+```
+"No local changes to save"      <- git stash push <declared solution files>
+"HEAD is now at 632858f"        <- git reset --hard test_commit
+"Removing diamond_kata.py"      <- git clean -fd deletes the agent's work
+"No stash entries found."       <- git stash pop fails, exit 1
+```
+
+The agent worked productively (tens to hundreds of tool calls) but created a
+**new file of its own naming** instead of editing the exercise's declared
+solution files — frequently in the wrong language entirely:
+`diamond_kata.py` for the C++ task `cpp__diamond`; `robot.py` and
+`spell_number.py` for JavaScript tasks; `src/main.rs` where the declared
+solution is `src/lib.rs`; `school_roster.py` plus a self-authored test file.
+Polyglot's harness stashes only the declared solution paths before revealing
+hidden tests, so these attempts leave nothing gradeable behind.
+
+**This is a genuine agent failure, not broken infrastructure**, and that
+distinction changes the reported numbers. D-43 established the discipline of
+excluding infrastructure failures from denominators. These rows superficially
+match — same exception machinery, adjacent marker — but excluding them would
+have reported `4/50 = 8.0%` where the correct figure is `4/59 = 6.8%`,
+inflating the resolve rate by shrinking the denominator over precisely the
+attempts that failed. **The correction was made in the direction that makes
+the result weaker.** `scripts/analyze_scaffold_sensitivity.py` now separates
+`incomplete` (exception *before* `eval_result` exists — true infra failure,
+excluded) from `error` (exception *during* grading — counted as unresolved,
+reported separately as `wrong-artifact`).
+
+**Why it matters beyond bookkeeping.** This is a third distinct way the
+scaffold–model *interface*, rather than coding ability, determines the
+measured outcome — alongside (1) not acting at all under `tool_choice="auto"`
+and (2) acting but failing the task. Like the other two it is invisible in a
+pass-rate column, where it is indistinguishable from having tried and been
+wrong. Note the failure modes *shift* rather than disappear with scale: the
+7B `required` arm had 0 wrong-artifact failures but 6 `empty_patch`; the 14B
+arm had 9 wrong-artifact and 0 `empty_patch`.
+
+**Also fixed**: the inline summary in `run_s0_polyglot_subset.py` computed
+`used_tools` over all rows while dividing by the infra-excluded denominator,
+printing the impossible `59/50`. Cosmetic (the real analysis script filters
+correctly first), but corrected so a glance at a run log is not misleading.
+
+---
+
 ## Still open
 
 | # | Decision | Status | Needed by |

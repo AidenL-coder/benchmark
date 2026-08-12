@@ -227,6 +227,81 @@ self-hosted, and hashable — but it is stated rather than hidden.
 `S0` only. It is **not** a frontier-crossing result, does not involve
 `S_evo`, and must not be presented as either.
 
+### 4.2 Outcomes against the declared predictions (recorded 2026-08-11)
+
+Written after the runs, scoring §4.1's predictions as stated. **All four arms
+complete at n = 59 each.**
+
+| Arm | Resolved | Used tools | Tool calls | Generations |
+|---|---|---|---|---|
+| 7B × `auto` | 0/59 | 0/59 | 0 | 59 |
+| 7B × `required` | 2/59 | 59/59 | 3663 | 3687 |
+| 14B × `auto` | 0/59 | 0/59 | 0 | 59 |
+| 14B × `required` | 4/59 | 59/59 | 5592 | 5617 |
+
+Tool-use effect vs `auto`: Fisher exact p = 3.4 × 10⁻¹³ for **both** `required`
+arms. Model-scale effect under `auto`: p = 1.0 (identical in every cell).
+Resolve-rate differences: p = 0.50 (7B) and p = 0.12 (14B) — **neither
+significant**, and neither claimed.
+
+**Prediction 1 — CONFIRMED, decisively.** `7B × required` shows
+substantially more tool use than `7B × auto`: 59/59 vs 0/59 tasks with at
+least one tool call (Fisher exact p = 3.4 × 10⁻¹³), Clopper-Pearson
+intervals [0.939, 1.000] vs [0.000, 0.061] — non-overlapping, with no
+exception in any of the six languages. The n = 1 observation from D-38
+generalises completely.
+
+**Prediction 2 — FALSIFIED.** The prediction was that `14B × auto` would
+show non-zero tool use, i.e. that the floor was a capability threshold the
+7B model sat below. It is not. At twice the parameter count the 14B arm
+reproduced the 7B arm in *every* cell: 0/59 resolved, 0/59 tasks with any
+tool call, 59/59 `empty_patch`, the same per-task generation distribution
+({1}) and patch-length distribution ({0}); mean completion tokens moved
+only 902 → 976. Recorded as wrong, per §4.1's own commitment to do so.
+
+**The interpretation §4.1 named in advance as the consequence of this
+falsification therefore applies**: the scaffold's default tool policy — not
+model capability — determines whether the agent acts at all, at least
+across the scales tested. This is the more useful finding, and would have
+been unavailable had the prediction not been registered first: the
+comfortable post-hoc story ("a 7B is simply too weak to be an agent") was
+both available and false.
+
+**Prediction 3 held as stated** (no prediction was registered about
+absolute resolve rates, and none is claimed). For completeness: the
+resolve-rate difference between `7B × auto` and `7B × required` is 0/59 vs
+2/59, Fisher exact p = 0.50 — **not statistically significant**, and it is
+not claimed as an improvement. This design cannot detect a resolve-rate
+shift below roughly 6/59 at α = 0.05.
+
+**One observation not predicted in advance, flagged as post-hoc.** The
+0 → 2 movement in resolved tasks is statistically negligible but
+algorithmically decisive: HGM's `expand()` filters the archive to nodes of
+*strictly positive* utility before sampling, so at exactly zero the
+candidate set is always empty and the search cannot take its first step
+(the D-41 crash). This connection was noticed after seeing the results and
+is reported as an observation, not a tested hypothesis.
+
+**A second post-hoc finding, also flagged as unregistered (D-46).** In 9 of
+59 tasks in the `14B × required` arm, the agent used tools productively but
+wrote a *new file of its own naming* instead of editing the exercise's
+declared solution files — often in the wrong language entirely
+(`diamond_kata.py` for the C++ task `cpp__diamond`; `robot.py` and
+`spell_number.py` for JavaScript tasks). Because the harness stashes only
+the declared solution paths before revealing hidden tests, these attempts
+leave nothing gradeable and surface as HGM's `error` marker.
+
+**This required a correction to the analysis, made in the direction that
+hurts the result rather than helps it.** D-43 established excluding
+infrastructure failures from denominators. These `error` rows superficially
+match that pattern but are *not* infrastructure failures — the agent genuinely
+failed the task. Excluding them would have reported `4/50 = 8.0%` instead of
+the correct `4/59 = 6.8%`, inflating the resolve rate by shrinking the
+denominator over exactly the attempts that failed. The analysis now
+distinguishes `incomplete` (exception *before* grading — true infra failure,
+excluded) from `error` (exception *during* grading — counted as unresolved,
+reported separately as `wrong-artifact`).
+
 ---
 
 ## 5. Primary and secondary outcomes

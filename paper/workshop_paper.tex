@@ -253,7 +253,7 @@ Arm & $n$ & Resolved & Used tools & Tool calls & Generations \\
 7B $\times$ \texttt{auto}      & 59 & 0 \,[0.000, 0.061] & 0 \,[0.000, 0.061] & 0 & 59 \\
 7B $\times$ \texttt{required}  & 59 & 2 \,[0.004, 0.117] & \textbf{59} \,[0.939, 1.000] & 3663 & 3687 \\
 14B $\times$ \texttt{auto}     & 59 & 0 \,[0.000, 0.061] & 0 \,[0.000, 0.061] & 0 & 59 \\
-14B $\times$ \texttt{required} & \todoresult{n} & \todoresult{res} & \todoresult{tools} & \todoresult{calls} & \todoresult{gens} \\
+14B $\times$ \texttt{required} & 59 & 4 \,[0.019, 0.165] & \textbf{59} \,[0.939, 1.000] & 5592 & 5617 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -291,8 +291,16 @@ recognise that it is the agent. This is a scaffold--model interface failure,
 and it is invisible to any evaluation that reports only pass rate.
 
 \paragraph{Two lines change the regime.}
-\todoresult{7B x required narrative, tool call counts, resolve rate, and the
-comparison against the auto arm}
+Switching \texttt{tool\_choice} from \texttt{"auto"} to \texttt{"required"},
+with everything else byte-identical, moves the 7B agent from 0 tool calls to
+3663 across the same 59 tasks---every single task using tools, in every
+language ($59/59$, Fisher exact $p = 3.4\times10^{-13}$). Model calls rise
+from 59 to 3687, and the agent now produces real patches that receive real
+test verdicts: 53 of 59 tasks yield a non-empty diff, and the modal outcome
+changes from \texttt{empty\_patch} (59/59) to \texttt{unresolved} (51/59).
+Two tasks are solved outright. The 14B model behaves the same way under the
+same flag (5592 tool calls, 4 solved), so the effect is a property of the
+policy, not of a particular model.
 
 \paragraph{A pre-registered prediction, and its falsification.}
 Before running the larger-model arms we registered the prediction that
@@ -311,7 +319,44 @@ is the point of registering predictions in advance. Had we not written the
 prediction down, the natural post-hoc framing---``a 7B model is too weak to be
 an agent''---would have been available, comfortable, and wrong.
 
+\paragraph{A third failure mode: acting on the wrong artifact.}
+Forcing tool use does not make the agent competent at the task
+\emph{interface}. In 9 of 59 cases in the 14B \texttt{required} arm, the agent
+worked productively---tens to hundreds of tool calls---but created a
+\emph{new file of its own naming} rather than editing the exercise's declared
+solution files. Frequently the new file was in the wrong language entirely:
+\texttt{diamond\_kata.py} for the C++ task \texttt{cpp\_\_diamond},
+\texttt{robot.py} and \texttt{spell\_number.py} for JavaScript tasks. The
+harness stashes only the declared solution paths before revealing the hidden
+tests, so these attempts leave nothing gradeable behind:
+
+\begin{quote}\small\ttfamily
+No local changes to save\\
+HEAD is now at 632858f\\
+Removing diamond\_kata.py\\
+No stash entries found.
+\end{quote}
+
+We count these as unresolved rather than excluding them, since the task was
+certainly not solved; excluding them would inflate the resolve rate by
+shrinking the denominator over exactly the attempts that failed. The mode is
+worth naming because it is a third way the scaffold--model interface, not the
+model's coding ability, determines the measured outcome---and because it too
+is invisible in a pass-rate column, where it is indistinguishable from having
+tried and been wrong.
+
 \subsection{Implications}
+
+\paragraph{The scaffold, not the model, decides whether an agent acts.}
+The completed $2\times2$ separates cleanly. Tool policy predicts agentic
+behaviour perfectly at both scales ($0/59 \to 59/59$, $p = 3.4\times10^{-13}$
+in each case); model scale predicts it not at all under the default policy
+($0/59$ vs $0/59$, $p = 1.0$). Resolve rate never reaches significance in any
+comparison ($0$, $2$, $0$, $4$ of 59; smallest $p = 0.12$). For meta-agent
+evaluation this reverses the usual attribution: a harness search that stumbles
+onto a tool-policy change is not discovering a better agent, it is discovering
+the switch that makes the agent an agent---and it will be credited with a
+capability gain either way.
 
 \paragraph{The frontier degenerates.}
 \Sz{} is what defines the measurable frontier. When $\Sz{} = 0$, every condition
@@ -324,11 +369,15 @@ because a study that reported ``the evolved scaffold beat the baseline'' from
 exactly this configuration would be reporting an artifact.
 
 \paragraph{The interaction term is large enough to explain reported gains.}
-\todoresult{quantified statement once required-arm numbers exist}
-A scaffold search that happens to discover a tool-policy change---or any
-equivalently trivial harness adjustment---would register as a large capability
-gain under current evaluation practice, while the frozen model's reachable set
-is unchanged by construction.
+Within our own grid, a two-line harness edit moves measured resolve rate from
+$0/59$ to $4/59$ while the frozen weights are untouched by construction. That
+shift is small in absolute terms and not individually significant, but it is
+the entire distance between ``this system solves nothing'' and ``this system
+solves tasks''---and it is precisely the kind of change a scaffold search is
+built to find. A search that discovers a tool-policy adjustment, a prompt
+tweak specifying which file to edit, or any equivalently trivial harness
+change would be credited with a capability gain under current evaluation
+practice, while the model's reachable set is unchanged by construction.
 
 \paragraph{The comparison is deliberately not compute-matched, and this
 strengthens rather than weakens the point.}
@@ -369,36 +418,19 @@ determines whether the evolutionary loop runs at all.
 
 \paragraph{Pass-rate selection is blind to the scaffold property that matters
 most.}
-Combining the two: the arms differ by $p\approx10^{-13}$ in behaviour and are
-indistinguishable in the signal used to select between them. A search procedure
-optimising pass rate---as DGM, HGM, and SICA all do---receives almost no
-gradient from the single change that determines whether its agent is an agent.
-Whatever such a search discovers, it does not discover it by seeing this.
+Combining the behavioural and pass-rate findings: the arms differ by
+$p\approx10^{-13}$ in whether the agent acts, and are indistinguishable in the
+signal used to select between them. A search procedure optimising pass
+rate---as DGM, HGM, and SICA all do---receives almost no gradient from the
+single change that determines whether its agent is an agent. The scaffold
+change that would break the deadlock is precisely the one its objective cannot
+see.
 
-This is not hypothetical. HGM's node-selection step estimates each archive
-entry's promise from its measured utility and expands the most promising. We
-found that its implementation raises \texttt{ValueError: attempt to get argmax
-of an empty sequence} whenever every archive node has utility exactly zero,
-because the candidate set is filtered to nodes with strictly positive utility
-before sampling. In the regime characterised here that filter is \emph{always}
-empty, so the degenerate branch is not an edge case but the expected path. An
-evolutionary search cannot bootstrap from a uniformly-zero signal, and the
-scaffold change that would break the deadlock is precisely the one its
-objective cannot see.
-
-\paragraph{The scaffold, not the model, decides whether an agent acts.}
-\todoresult{final 2x2} Across \todoresult{n} tasks and two model scales, tool
-policy predicts agentic behaviour essentially perfectly while model scale
-predicts it not at all. For meta-agent evaluation this reverses the usual
-attribution: a harness search that stumbles onto a tool-policy change is not
-discovering a better agent, it is discovering the switch that makes the agent
-an agent---and it will be credited with a capability gain either way.
-
-The practical implication is that self-improvement results are only
-interpretable within a band: the base model must be strong enough that the
-selection signal is non-degenerate, but the scaffold must already be
-functional enough that the search is not merely rediscovering its own
-switches. Neither boundary is currently reported by any system we reviewed.
+\paragraph{Self-improvement results are only interpretable within a band.}
+The base model must be strong enough that the selection signal is
+non-degenerate, but the scaffold must already be functional enough that the
+search is not merely rediscovering its own switches. Neither boundary is
+currently reported by any system we reviewed.
 
 \paragraph{A concrete consequence for meta-agent evaluation.}
 Reported gains for self-improving agents should be accompanied by (i) an
@@ -418,7 +450,7 @@ condition on a failure without quoting it.
 necessarily post-hoc, since a trajectory's cost is unknown until it has run.
 
 \paragraph{External.} Results are for one model family at
-\todoresult{one or two} sizes, one task family, and one forked system. Whether
+two sizes (7B, 14B), one task family, and one forked system. Whether
 the interaction persists at frontier-model scale---where these systems are
 normally run---is untested here and is the most important open question. We do
 not claim a 7B model \emph{should} solve these tasks; we claim the measured

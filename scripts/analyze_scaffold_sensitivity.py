@@ -46,10 +46,30 @@ def fisher_exact_two_sided(a: int, b: int, c: int, d: int) -> float:
     hi = min(row1, col1)
     return min(1.0, sum(p_table(x) for x in range(lo, hi + 1) if p_table(x) <= observed + 1e-12))
 
-#: HGM's own markers for an exception raised inside process_entry before
-#: grading -- infrastructure failure, not a task the model failed (D-43).
-#: Excluded from denominators rather than counted as zeros.
-INFRA_MARKERS = {"incomplete", "error", ""}
+#: `incomplete` is HGM's marker for an exception raised inside process_entry
+#: *before* `eval_result` was ever set -- i.e. the harness broke before it
+#: could grade anything. That is a genuine infrastructure failure, not a task
+#: the model failed (D-43), and is excluded from denominators.
+INFRA_MARKERS = {"incomplete", ""}
+
+#: `error` is NOT treated as an infrastructure failure, despite also being an
+#: exception marker (D-46). It means the exception fired *after* `eval_result`
+#: existed -- in practice, during the grading sequence. Every occurrence
+#: observed (9/59 in the 14B x required arm) had the same verified cause, and
+#: it is a genuine agent failure rather than a broken measurement:
+#:
+#:   "No local changes to save"   <- git stash push <declared solution files>
+#:   "Removing diamond_kata.py"   <- git clean -fd deletes the agent's work
+#:   "No stash entries found."    <- git stash pop fails, exit 1
+#:
+#: The agent created a NEW file of its own naming -- frequently in the wrong
+#: language entirely (`diamond_kata.py` for `cpp__diamond`; `robot.py` and
+#: `spell_number.py` for JavaScript tasks) -- instead of editing the task's
+#: declared solution files. Nothing gradeable changed, so the task was
+#: certainly not solved. Excluding these would silently inflate the resolve
+#: rate by shrinking the denominator on exactly the attempts that failed.
+#: They are counted as unresolved.
+AGENT_FAILURE_MARKERS = {"error"}
 
 #: `solution_len` is NOT a usable measure of how much the agent actually
 #: changed, and must not be reported as one. Once an agent really uses tools
@@ -95,6 +115,9 @@ def load_arm(path: Path) -> dict:
 
     valid = [r for r in rows if r.get("eval_result") not in INFRA_MARKERS]
     infra = len(rows) - len(valid)
+    # Counted inside `valid` (as unresolved), reported separately -- see
+    # AGENT_FAILURE_MARKERS for why these are not exclusions.
+    wrong_artifact = sum(1 for r in valid if r.get("eval_result") in AGENT_FAILURE_MARKERS)
 
     resolved = sum(1 for r in valid if r.get("passed"))
     used_tools = sum(1 for r in valid if r.get("trace_op_counts", {}).get("tool_call", 0) > 0)
@@ -115,6 +138,7 @@ def load_arm(path: Path) -> dict:
         "label": ARM_LABELS.get((model, agent), f"{model} x {agent}"),
         "n": n,
         "infra_excluded": infra,
+        "wrong_artifact": wrong_artifact,
         "resolved": resolved,
         "resolved_ci": (lo_r, hi_r),
         "used_tools": used_tools,
@@ -179,6 +203,7 @@ def main() -> None:
             f"generations {a['total_generations']:>5} | "
             f"mean completion tok {a['mean_completion_tokens']:>7.0f} | "
             f"mean wall {a['mean_elapsed_s']:>6.0f}s | "
+            f"wrong-artifact {a['wrong_artifact']:>2} | "
             f"infra-excl {a['infra_excluded']}"
         )
     print()
