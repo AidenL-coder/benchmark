@@ -53,6 +53,15 @@ def load(fname: str) -> dict:
 data = {(m, p): load(f) for m, p, f in ARMS}
 n = max(d["n"] for d in data.values())
 
+# Attempted-but-unparsed calls, measured from the transcripts rather than the
+# API (see results/prose_toolcalls.json). Plotting only the structured counts
+# would reproduce the misreading this paper corrects: it would show the 14B
+# auto arm at zero tool use when in fact it attempted a call on 47/59 tasks.
+PROSE = json.loads((RESULTS / "prose_toolcalls.json").read_text())["arms"]
+for scale in ("7b", "14b"):
+    data[(scale, "auto")]["attempted"] = PROSE[f"{scale}_auto"]["emitted"]
+    data[(scale, "required")]["attempted"] = data[(scale, "required")]["used_tools"]
+
 # Muted blue / warm orange, distinguishable in greyscale by marker and dash
 # pattern as well as hue, since printed reviewer copies are often monochrome.
 #
@@ -73,6 +82,35 @@ panels = [
 ]
 
 for ax, (key, title) in zip(axes, panels):
+    # On the tool-use panel only, overlay what the model *attempted*, counted
+    # from transcripts. The gap between the hollow and filled markers at
+    # x=auto is the paper's central measurement artifact.
+    if key == "used_tools":
+        for scale in ("7b", "14b"):
+            st = STYLE[scale]
+            ax.plot(
+                [0 + st["dx"], 1 + st["dx"]],
+                [data[(scale, "auto")]["attempted"], data[(scale, "required")]["attempted"]],
+                marker=st["marker"],
+                color=st["color"],
+                linestyle=":",
+                linewidth=1.2,
+                markersize=6,
+                markerfacecolor="white",
+                markeredgecolor=st["color"],
+                clip_on=False,
+                zorder=1,
+            )
+        ax.annotate(
+            f"attempted\n(unparsed): {data[('14b','auto')]['attempted']}",
+            (0 + STYLE["14b"]["dx"], data[("14b", "auto")]["attempted"]),
+            textcoords="offset points",
+            xytext=(14, -4),
+            fontsize=8,
+            color=STYLE["14b"]["color"],
+            annotation_clip=False,
+        )
+
     for scale in ("7b", "14b"):
         ys = [data[(scale, "auto")][key], data[(scale, "required")][key]]
         st = STYLE[scale]
@@ -131,9 +169,10 @@ for ax, (key, title) in zip(axes, panels):
     ax.grid(axis="y", alpha=0.25, linewidth=0.6)
 
 axes[0].set_ylabel(f"Tasks (of {n})", fontsize=9)
-# Upper left is the only reliably empty quadrant: the left panel's line runs
-# bottom-left to top-right, so a centred legend sits on top of it.
-axes[0].legend(frameon=False, fontsize=9, loc="upper left")
+# Lower right: the panel's lines run bottom-left to top-right and the
+# attempted-call annotation occupies the upper left, so this is the only
+# quadrant left free.
+axes[0].legend(frameon=False, fontsize=9, loc="lower right")
 
 fig.tight_layout()
 OUT.parent.mkdir(parents=True, exist_ok=True)

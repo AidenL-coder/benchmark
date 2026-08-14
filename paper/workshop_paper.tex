@@ -42,8 +42,8 @@
 \newcommand{\Sstar}{\ensuremath{S_*}}
 \newcommand{\Sevo}{\ensuremath{S_{\mathrm{evo}}}}
 
-\title{Zero Actions: A Published Self-Improving Agent Scaffold Takes\\
-No Tool Calls at 7B and 14B Scale---and Pass Rate Cannot Tell}
+\title{Protocol Compliance, Not Capability:\\
+What a Self-Improving Coding Agent's Zero Actually Records}
 
 % NOTE: do not begin a line here with a bare "[" directly after "\\" --
 % LaTeX parses "\\[...]" as an optional vertical-space argument and fails
@@ -59,35 +59,36 @@ No Tool Calls at 7B and 14B Scale---and Pass Rate Cannot Tell}
 \maketitle
 
 \begin{abstract}
-We run the unmodified default agent of a published, award-recognised
-self-improving coding system (HGM) on \emph{its own} 59-task Polyglot
-baseline, with a frozen \texttt{Qwen2.5-Coder-7B-Instruct}, and observe
-\textbf{zero}: 0/59 tasks resolved, 0 tool calls, 59/59 empty patches,
-uniform across six languages with no exception. The model is not failing at
-code: it emits a mean of 902 tokens of competent analysis per task, then
-stops without editing a file, in one case politely instructing the user to
-apply its patch by hand. \textbf{Doubling model scale does not help}:
-\texttt{Qwen2.5-Coder-14B} reproduces the 7B result in every cell, falsifying
-a prediction we registered in advance. What does help is a two-line harness
-edit (\texttt{tool\_choice} \texttt{"auto"}$\to$\texttt{"required"}), which
-moves the same model to 59/59 tasks using tools and 3663 tool calls
-($p = 3.4\times10^{-13}$).
+Self-improving coding agents hold a foundation model frozen and evolve the
+scaffold around it, selecting variants by benchmark pass rate. Whether their
+reported gains reflect expanded capability or better elicitation remains
+unresolved, and any answer presupposes that the selection signal can observe
+what the agent does.
 
-The consequence for meta-agent evaluation is the point of this paper. These
-two behaviourally opposite configurations are \emph{statistically
-indistinguishable in pass rate} ($2/59$ vs $0/59$, $p = 0.50$) despite
-differing $62\times$ in consumed compute. Pass rate, the signal DGM, HGM,
-and SICA all select on, cannot see whether the agent is an agent, and the
-resulting all-zero utility is mechanically why the forked search crashes
-before its first expansion step. Forcing tool use also does not confer
-task competence: in 9/59 cases the agent worked hard but wrote a file of its
-own naming, often in the wrong language entirely, leaving nothing gradeable.
-We therefore argue that reported self-improvement gains are currently
-unattributable, and contribute the instrument the attribution requires:
-matched-compute elicitation controls, operation tagging enforced by
-\emph{network-layer interception} rather than agent self-report, causal
-ablation that withholds a capability rather than requesting its disuse, and
-frontier estimation with non-parametric coverage bounds---all pre-registered.
+We run the unmodified default agent of a published, award-recognised such
+system on its own 59-task Polyglot baseline with frozen
+\texttt{Qwen2.5-Coder} models. Both 7B and 14B record zero tool calls and
+59/59 empty patches, identical in every logged cell. The transcripts
+disagree. The 7B model writes prose for a human reader, often in the wrong
+language, and closes by explaining how to run it. The 14B model selects the
+correct tool and arguments and states its intent to edit the repository, but
+emits the call as fenced JSON rather than in the structured field the harness
+parses: on 47 of 59 tasks, of which 30 are well-formed enough to dispatch
+unchanged. Invalid output formatting is a catalogued tool-use error; its
+consequence in this setting is not. Because both failures are recorded as
+zero, archive utility is constant and the evolutionary search cannot take its
+first step.
+
+Setting \texttt{tool\_choice="required"} restores tool use on 59/59 tasks
+($p = 3.4\times10^{-13}$) by constraining decoding to the tool-call grammar,
+repairing protocol compliance rather than volition. Pass rate separates none
+of this ($2/59$ vs $0/59$, $p = 0.50$) despite a $62\times$ difference in
+consumed compute. We report a pre-registered prediction falsified by a
+measure we then show was blind to the behaviour it was meant to capture, and
+contribute the instrument such attribution requires: matched-compute
+elicitation controls, operation tagging by network-layer interception rather
+than self-report, causal ablation, and frontier estimation with
+non-parametric coverage bounds.
 \end{abstract}
 
 \section{Introduction}
@@ -126,23 +127,36 @@ tool-policy flag changes tool use, which is definitional, but three
 things that are not:
 
 \begin{enumerate}
-\item A \emph{published, award-recognised} system's own default agent produces
-  \textbf{no actions whatsoever} on \emph{its own} benchmark at 7B and 14B
-  scale. Not degraded performance: zero tool calls, zero non-empty patches,
-  59/59 tasks, six languages.
-\item \textbf{Scale does not rescue it.} We registered the opposite prediction
-  in advance and report it falsified.
-\item \textbf{Pass rate cannot detect any of this.} Two configurations
-  differing totally in behaviour and $62\times$ in compute are statistically
-  indistinguishable in the very signal used to select between
-  scaffolds---so a search optimising it is blind to the property that
-  determines whether its agent acts at all.
+\item A \emph{published, award-recognised} system's own default agent records
+  \textbf{zero tool calls} on \emph{its own} benchmark at both 7B and 14B
+  scale: 59/59 empty patches, six languages, no exception. Every quantity
+  the system logs is identical across the two scales.
+\item \textbf{That zero conceals two unrelated failures.} The transcripts
+  show the 7B model writing prose for a human reader, and the 14B model
+  selecting the correct tool and arguments but emitting the call in the
+  wrong channel---fenced JSON rather than the structured field the harness
+  parses. On 30/59 tasks the 14B call is well-formed enough to have been
+  dispatched by a lenient parser. We had registered the prediction that 14B
+  would show non-zero tool use and scored it falsified; we report that the
+  falsification was an artifact of measuring structured
+  \texttt{tool\_calls} alone.
+\item \textbf{No selection signal in use can separate these cases.} Two
+  configurations differing totally in behaviour and $62\times$ in compute
+  are statistically indistinguishable in pass rate, so a search optimising
+  it cannot distinguish an agent that never tries from one that is a
+  serialisation format away from acting.
 \end{enumerate}
 
 Section~\ref{sec:instrument} describes the instrument that makes such
 attribution measurable, designed to attach to an existing,
 independently-implemented loop rather than to a system co-designed with its
-own evaluation.
+own evaluation. Section~\ref{sec:repro} reports separately on executing the
+\emph{proposal} half of the same system, where six defects had to be repaired
+before a scaffold variant could be generated at all, and where four of the six
+were reported through the same channel as ordinary model failure. That
+observation is a smaller contribution than the measurement result, but it
+bears on the same question: whether the quantities these systems record can
+be taken at face value.
 
 \section{Related work}
 
@@ -172,6 +186,20 @@ against token cost over sequential task streams. On the basis of their
 abstracts and summaries (we have not yet read either in full), neither
 appears to estimate a frozen-model frontier or to attribute gains between
 elicitation and expansion.
+
+\paragraph{Tool-use error taxonomies.}
+The failure we characterise in Section~\ref{sec:results} is a known one.
+\citet{kokane2024toolscan} catalogue seven recurring tool-use error patterns
+in LLMs, among them \emph{invalid output formatting}, which covers models
+that emit a call as markdown or unstructured JSON rather than in the
+structured field a harness parses. \textbf{We claim no novelty for the
+phenomenon.} What is new here is its consequence in a setting that taxonomy
+does not consider: inside a self-improving system, a formatting failure does
+not merely lower a score, it drives the selection signal to a constant and
+halts the search that consumes it. \citet{kokane2024toolscan} evaluate
+tool-use accuracy directly and do not connect these errors to benchmark
+selection signals or to evolutionary agent systems; that connection, and its
+consequences for attribution, is our contribution.
 
 \paragraph{Elicitation gaps.}
 Work on scaffold-induced performance variation \citep{starace2026scaffold}
@@ -227,6 +255,12 @@ role is to answer the elicitation question directly: how much of any observed
 gain is reachable \emph{without evolution at all}, at matched compute. \Sevo{}
 is a forked, independently-implemented evolving scaffold.
 
+The ladder is deliberately ordered by what each rung licenses. A gain over
+\Sz{} shows only that the scaffold does something; a gain over \Sstar{} at
+matched compute is the first result that cannot be explained by sampling the
+same frozen model harder. We treat the second comparison, not the first, as
+the meaningful one, and report both.
+
 \paragraph{Attribution by interception, not self-report.}
 An evolved scaffold's code is produced by a process optimising ``solve more
 tasks,'' not ``report your own operations honestly''; a variant that omitted
@@ -235,11 +269,39 @@ therefore never rely on instrumentation \emph{inside} the agent. Because
 forked agents run as separate OS processes inside Docker, we intercept at the
 only remaining boundary, the network, using a transparent reverse proxy
 between container and model server that records every request/response pair.
-Operations are then classified post hoc from what was observed. Each
-intercepted operation is labelled \emph{support-preserving} (selection,
+Operations are then classified post hoc from what was observed.
+
+Two properties of this design matter for what the paper can claim. First, the
+proxy observes the wire, so it sees exactly what the harness sees and nothing
+more: this is what let us establish that the \texttt{auto} arms issue one
+generation per task, and equally what prevented us from noticing, until we
+read trajectories, that a majority of those generations \emph{contained} a
+tool call. An interception layer is an honest witness to the protocol, not to
+intent, and \S\ref{sec:results} is in part a report of that distinction
+mattering. Second, non-200 responses are recorded but excluded from
+generation counts, so a backend error cannot inflate a scaffold's apparent
+work; we found this necessary after an early version counted failed calls as
+legitimate generations.
+
+Each intercepted operation is labelled \emph{support-preserving} (selection,
 retries, self-consistency: replicable by sampling the frozen model harder) or
 \emph{support-expanding} (tool output conditioning later generations,
-execution feedback reshaping a prompt).
+execution feedback reshaping a prompt). The partition is the load-bearing
+abstraction of the instrument: support-preserving operations cannot move the
+frozen model's reachable set by construction, so a gain attributable
+entirely to them is elicitation regardless of how large it is. Classification
+is behavioural---whether a later request contains a substantial fragment of
+an earlier response or of execution output---and we treat it as evidence
+rather than proof (\S\ref{sec:limitations}).
+
+\paragraph{Compute accounting.}
+Every model call is charged to a budget accountant that records prompt and
+completion tokens, so ``matched compute'' is a measured quantity rather than
+a nominal setting. This is what makes the elicitation control meaningful: a
+scaffold that wins by issuing sixty times more generations has not
+demonstrated anything about the model. For containerised trajectories the
+charge is necessarily post hoc, since a trajectory's cost is not known until
+it has run, so the accountant surfaces overruns rather than preventing them.
 
 \paragraph{Causal ablation.}
 To test whether a support-expanding operation is \emph{necessary} for a solve,
@@ -264,15 +326,46 @@ the manipulation---before its runs executed.
 
 \subsection{Setup}
 
+\paragraph{Tasks and grading.}
 We run \Sz{} on the 59-task Polyglot subset that HGM itself uses as its
 baseline evaluation set,\footnote{HGM's own subset definition lists 60 entries,
 of which 59 are unique; one instance identifier appears in both of its
 constituent files.} spanning six languages (C++, Go, Java, JavaScript, Python,
-Rust). Grading uses HGM's real harness: a per-task Docker container in which
-hidden tests are revealed only after the agent has stopped. The frozen model is
-\texttt{Qwen2.5-Coder-7B-Instruct}, self-hosted under vLLM---self-hosting is
-load-bearing here, both for verifiable frozen-ness and because frontier
-estimation is sample-hungry.
+Rust); the full list is given in Appendix~\ref{app:tasks}. Choosing the
+system's own subset is deliberate: a null result on a set we selected would
+invite the objection that we chose unfavourable tasks.
+Grading uses HGM's real harness rather than a reimplementation: a per-task
+Docker container in which the hidden tests are revealed, by resetting to a
+test commit, only after the agent has stopped. The agent therefore never sees
+the tests it is graded on, and we inherit the harness's own definitions of
+\texttt{resolved}, \texttt{unresolved}, and \texttt{empty\_patch}.
+
+\paragraph{Model and serving.}
+The frozen models are \texttt{Qwen2.5-Coder-7B-Instruct} and
+\texttt{Qwen2.5-Coder-14B-Instruct-AWQ} (4-bit weight quantisation, used so
+the larger model fits the same single 24\,GB accelerator and the scale
+comparison costs no additional hardware). Both are self-hosted under vLLM
+0.26 with a 16{,}384-token context, automatic tool-choice parsing enabled and
+the model family's own tool-call parser selected. Self-hosting is
+load-bearing: it makes frozen-ness verifiable rather than promised, keeps
+contamination questions inspectable, and matters because frontier estimation
+is sample-hungry. It is also what surfaces the result in
+\S\ref{sec:results}---a hosted endpoint that silently repaired malformed tool
+calls would have hidden the failure entirely.
+
+The \texttt{required} arms differ from the \texttt{auto} arms in exactly two
+source lines, both in the agent's own model-call wrapper, applied to an
+isolated copy so the measured default agent is never mutated. All other
+configuration is byte-identical, including sampling parameters, and each
+result record carries the model identifier and agent-variant name so that no
+two arms can be merged by accident.
+
+\paragraph{Deviation for the self-improvement runs.}
+The runs in \S\ref{sec:repro} required a 32{,}768-token context, because
+HGM's diagnosis prompt does not fit a 16k window. Those runs therefore do
+\emph{not} share a serving configuration with the four arms reported in
+Table~\ref{tab:main}, and we do not compare their numbers directly; each
+re-evaluates its own seed. We state this rather than quietly pool the two.
 
 We manipulate one variable: the agent's tool policy. The
 \texttt{required} variant differs from HGM's unmodified default agent in
@@ -286,13 +379,17 @@ task set, and the grading harness are identical.
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{fig1_asymmetry.pdf}
-\caption{The same two-line scaffold change, measured two ways, on a shared
-$0$--$59$ axis. Left: whether the agent takes any action at all. Right:
-whether it solves the task. Both model scales behave identically under the
-default policy (both at zero, left panel), so the separation is produced by
-the tool policy rather than by capability. Plotting both panels on one scale
-is deliberate: on its own axis the right-hand panel would look like a large
-effect, which is the misreading this paper argues against.}
+\caption{The same two-line scaffold change, measured three ways, on a shared
+$0$--$59$ axis. Left, filled markers: tasks with a \emph{structured} tool
+call, the quantity the harness acts on. Left, hollow markers: tasks where a
+tool call was \emph{attempted}, counted from the transcripts. Right: tasks
+resolved. The gap between hollow and filled at
+\texttt{tool\_choice="auto"}---47 versus 0 for the 14B model---is the
+measurement artifact this paper reports: the two scales are identical in
+every recorded cell while differing almost tenfold in attempted actions.
+Plotting all panels on one scale is deliberate; on its own axis the
+resolve-rate panel would suggest a large effect, which is the misreading we
+argue against.}
 \label{fig:asymmetry}
 \end{figure}}{}
 
@@ -315,47 +412,157 @@ Arm & $n$ & Resolved & Used tools & Tool calls & Generations \\
 \end{table}
 
 \paragraph{Behaviour under the default policy.}
-Under HGM's unmodified \texttt{tool\_choice="auto"} default, the frozen 7B model
+Under HGM's unmodified \texttt{tool\_choice="auto"} default, both frozen models
 resolved \textbf{0 of 59} tasks and made \textbf{0 tool calls}, uniformly across
-all six languages. The uniformity is total: across all 59 tasks the distribution
-of per-task model calls is $\{1\}$, of tool calls $\{0\}$, and of produced patch
-lengths $\{0\}$. Not one task deviated.
+all six languages. The uniformity is total: at both scales the distribution of
+per-task model calls is $\{1\}$, of tool calls $\{0\}$, and of produced patch
+lengths $\{0\}$. Not one task deviated. Neither model is failing at code; each
+emits several hundred tokens of coherent analysis (7B mean 902, 14B mean 976)
+before terminating with \texttt{finish\_reason="stop"} and
+\texttt{tool\_calls=None}. Since no file is modified, the diff is empty and the
+task fails before any test executes.
 
-The failure mode is not incompetence at coding. The model emits a mean of 902
-completion tokens per task (median 807, range 356--2371) of coherent,
-well-structured analysis: restating the problem, sketching an algorithm, and
-often writing a plausible full solution, then terminates with
-\texttt{finish\_reason="stop"} and \texttt{tool\_calls=None}. Since no file is
-modified, the diff is empty and the task fails before any test executes.
+\paragraph{The zero conceals two unrelated failures.}
+Read only through the API, the two scales are indistinguishable. Read through
+the transcripts, they are doing different things, and only one of them
+resembles the natural reading of a zero.
 
-The most direct illustration comes from the model's own output. On
-\texttt{python\_\_dominoes}, after producing a complete candidate implementation,
-it closes with:
+The 7B model does not appear to model itself as the actor. It writes a
+solution for a human reader and closes by explaining how that reader might
+install it (Figure~\ref{fig:transcripts}, top). It holds an edit tool
+throughout and has been told it is operating on a repository.
 
-\begin{quote}\small
-\emph{``To integrate this into your project, you can create a new Python file in
-the \texttt{/testbed/} directory, say \texttt{domino\_solver.py}, and add the
-above code to it. Then, you can call this function from your main program\ldots{}
-If you need further assistance or have additional requirements, feel free to let
-me know!''}
+The 14B model does the opposite. It behaves as an agent, names the tool it
+intends to use, selects arguments correctly, and then emits the call as fenced
+JSON in the assistant message rather than in the structured field the harness
+parses (Figure~\ref{fig:transcripts}, bottom). We verified that this is not a
+deployment fault: the chat template renders the full tool schemas inside
+\texttt{<tools>} tags and states the required
+\texttt{<tool\_call>}\ldots\texttt{</tool\_call>} convention with a worked
+example, and an identical request differing only in
+\texttt{tool\_choice="required"} returns the same intent as a structured call.
+The model is told the protocol and does not follow it. Appendix
+\ref{app:protocol} records these checks in full, since the alternative
+explanation---that our deployment failed to advertise the tools---would
+invalidate the result entirely.
+
+Table~\ref{tab:prose} quantifies this over all 118 transcripts. We grade
+each at three strictnesses, since they license different claims: whether a
+call was \emph{emitted} at all, whether it \emph{parses} as JSON, and whether
+it is \emph{runnable}, meaning it names a real tool and supplies every
+required argument, so a lenient parser could have dispatched it unchanged.
+
+\begin{figure}[t]
+\centering
+\small
+\begin{minipage}{0.95\linewidth}
+\textbf{(a) 7B, \texttt{python\_\_dominoes}} --- the model addresses a human
+reader.
+\begin{quote}\itshape\footnotesize
+``To integrate this into your project, you can create a new Python file in the
+\texttt{/testbed/} directory, say \texttt{domino\_solver.py}, and add the above
+code to it. Then, you can call this function from your main
+program\ldots{} If you need further assistance or have additional
+requirements, feel free to let me know!''
 \end{quote}
+\rule{\linewidth}{0.4pt}
+\textbf{(b) 14B, \texttt{cpp\_\_all-your-base}} --- the model acts, in the
+wrong channel.
+\begin{quote}\itshape\footnotesize
+``Now, let's apply these changes to the code files in the \texttt{/testbed/}
+directory. We'll use the \texttt{editor} tool to edit the
+\texttt{base\_converter.py} file.''
+\end{quote}
+\begin{quote}\ttfamily\footnotesize
+\{"name": "editor", "arguments": \{"command": "edit",\\
+"path": "/testbed/base\_converter.py", "file\_text": "\ldots"\}\}
+\end{quote}
+\end{minipage}
+\caption{Assistant output from the two \texttt{auto} arms; both responses
+carry \texttt{tool\_calls=None} and are scored identically as
+\texttt{empty\_patch}. In (b) the call names a real tool with valid
+arguments and is emitted as fenced JSON rather than inside
+\texttt{<tool\_call>} tags. Note also that (b) targets a Python file for a
+C++ task, the wrong-artifact mode of \S\ref{sec:results}.}
+\label{fig:transcripts}
+\end{figure}
 
-The model is instructing \emph{a human} to apply its patch, while holding an
-edit tool that would let it do so itself and having been told it is operating on
-a repository. It has not failed to solve the problem; it has failed to
-recognise that it is the agent. This is a scaffold--model interface failure,
-and it is invisible to any evaluation that reports only pass rate.
+\begin{table}[t]
+\caption{Tool calls in the \texttt{auto} arms, graded by strictness.
+``Structured'' is what the harness reads and what Table~\ref{tab:main}
+reports. ``Runnable'' calls are dispatchable as-is; this is not a claim that
+the task would then have been solved.}
+\label{tab:prose}
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Arm & Structured & Emitted & Parses & Runnable \\
+\midrule
+7B $\times$ \texttt{auto}  & 0/59 & 5/59  & 2/59  & 1/59 \\
+14B $\times$ \texttt{auto} & 0/59 & \textbf{47/59} & 38/59 & \textbf{30/59} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+On \textbf{30 of 59} tasks the 14B agent is a serialisation format away from
+proceeding, and the harness records that outcome as identical to the 7B
+agent's conversational misunderstanding. The attrition between columns is
+itself informative: nine emitted calls are malformed JSON and a further eight
+parse but omit a required argument, so the model's protocol failure is
+graded rather than absolute.
+
+The effect is not an artifact of one language's task phrasing. Table
+\ref{tab:bylang} breaks the same measurement down by language: the 14B model
+attempts a call in every one of the six, at rates between $6/10$ and $10/10$,
+while the 7B model attempts almost none anywhere. The two models differ
+consistently, and neither differs much across languages.
+
+\begin{table}[t]
+\caption{Attempted (emitted) and dispatchable (runnable) tool calls per
+language in the \texttt{auto} arms. Structured tool calls are $0$ in every
+cell of this table, for both models and all six languages.}
+\label{tab:bylang}
+\centering
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+& & \multicolumn{2}{c}{14B $\times$ \texttt{auto}} & \multicolumn{2}{c}{7B $\times$ \texttt{auto}} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}
+Language & $n$ & Emitted & Runnable & Emitted & Runnable \\
+\midrule
+C++        & 5  & 5  & 2 & 0 & 0 \\
+Go         & 10 & 10 & 7 & 0 & 0 \\
+Java       & 12 & 8  & 4 & 1 & 0 \\
+JavaScript & 10 & 6  & 5 & 1 & 1 \\
+Python     & 11 & 8  & 4 & 3 & 0 \\
+Rust       & 11 & 10 & 8 & 0 & 0 \\
+\midrule
+Total      & 59 & \textbf{47} & \textbf{30} & 5 & 1 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \paragraph{Effect of the tool-policy flag.}
 That setting \texttt{tool\_choice="required"} increases tool calls is
-definitional. Three things about \emph{how} it
-lands are not definitional, and are what we report: the baseline it moves from
-is exactly zero rather than merely low; the same flag is what separates ``this
-system does nothing'' from ``this system solves tasks'' on a benchmark the
-system's authors chose; and, as the implications below show, the
-change is invisible to pass rate. A flag whose effect is definitional at the
-behavioural level can still be undetectable at the level a search actually
-optimises---that gap is the finding.
+definitional, and the mechanism matters for how the result may be read. Under
+this setting the serving stack constrains decoding to the tool-call grammar,
+so a structured call is emitted whether or not the model would have produced
+one unprompted. Given Table~\ref{tab:prose}, the honest description is that
+the flag \textbf{repairs protocol compliance}, not that it induces volition:
+for the 14B model, intent was already present in a majority of transcripts
+and only the serialisation was wrong. \emph{We therefore do not claim that
+the tool policy determines whether the agent tries to act.} What we claim is
+narrower and sufficient: the flag determines whether the harness can
+\emph{observe} an attempt, and every selection signal in use depends on that
+observation.
+
+Three consequences are not definitional, and are what we report: the measured
+baseline is exactly zero rather than merely low; the same flag separates
+``this system does nothing'' from ``this system solves tasks'' on a benchmark
+the system's authors chose; and the change is invisible to pass rate. A flag
+whose behavioural effect is definitional can still be undetectable at the
+level a search actually optimises, and that gap is the finding.
 
 Switching \texttt{tool\_choice} from \texttt{"auto"} to \texttt{"required"},
 with everything else byte-identical, moves the 7B agent from 0 tool calls to
@@ -370,22 +577,33 @@ policy, not of a particular model. Figure~\ref{fig:asymmetry} plots both
 measurements on a common axis: the same intervention that saturates the
 behavioural panel barely lifts the resolve-rate panel off zero.
 
-\paragraph{A pre-registered prediction, and its falsification.}
+\paragraph{A pre-registered prediction, its falsification, and a defective
+measure.}
 Before running the larger-model arms we registered the prediction that
 \texttt{14B}~$\times$~\texttt{auto} would show non-zero tool use---i.e.\ that
-the floor reflected a capability threshold the 7B model sat below.
-\textbf{This prediction was wrong, and not marginally so.} At twice the
-parameter count, \texttt{14B}~$\times$~\texttt{auto} produced
-\textbf{0/59 resolved, 0/59 tasks with any tool call, and 59/59 empty
-patches}---a result identical to the 7B arm in every cell, including the
-distribution of per-task generations ($\{1\}$) and patch lengths ($\{0\}$).
-Mean completion tokens rose only from 902 to 976. The determinant of whether
-the agent acts is the scaffold's tool policy, not the model's capability.
+the floor reflected a capability threshold the 7B model sat below. We
+operationalised ``tool use'' as structured \texttt{tool\_calls}, the quantity
+the harness itself acts on. Against that measure the prediction was falsified
+outright: \texttt{14B}~$\times$~\texttt{auto} produced \textbf{0/59 resolved,
+0/59 tasks with any tool call, and 59/59 empty patches}, identical to the 7B
+arm in every cell, including the distributions of per-task generations
+($\{1\}$) and patch lengths ($\{0\}$), with mean completion tokens rising
+only from 902 to 976.
 
-We report this because it is the more useful result, and because reporting it
-is the point of registering predictions in advance. Had we not written the
-prediction down, the natural post-hoc framing (``a 7B model is too weak to be
-an agent'') would have been available, comfortable, and wrong.
+\textbf{We report the falsification as it was scored, and we also report that
+the measure was inadequate.} Table~\ref{tab:prose} shows the prediction's
+substance---that the larger model would attempt to use tools---was in fact
+correct, and by a wide margin (47/59 versus 5/59 attempted calls); it was the
+operationalisation that could not see it. Both facts belong in the record.
+Registering the prediction is what forced the transcripts open: had we not
+written it down, the post-hoc framing ``a 7B model is too weak to be an
+agent'' would have been available, comfortable, and wrong, and the
+identical-in-every-cell result would have looked like confirmation of it.
+
+We draw the methodological point rather than soften it. A pre-registered
+measure can be wrong in the same way a scaffold's selection signal can be
+wrong, and for the same reason: both were defined over what the system
+records rather than what the agent does.
 
 \paragraph{A third failure mode: acting on the wrong artifact.}
 Forcing tool use does not make the agent competent at the task
@@ -507,7 +725,99 @@ and (ii) a fixed-scaffold elicitation control at matched compute. Without both,
 a pass-rate delta is consistent with the model's capability boundary not having
 moved at all.
 
+\section{Executing the self-improvement path}
+\label{sec:repro}
+
+The results above concern the \emph{evaluation} half of a self-improving
+system. We also attempted its \emph{proposal} half, forking HGM and running
+\texttt{sample\_child}---the routine that generates a scaffold variant---against
+our self-hosted deployment. To our knowledge this path had not previously been
+exercised outside its authors' own hosted configuration, and six defects had to
+be repaired before a single child could be proposed. We report them because the
+distribution of \emph{how they surface} is itself a finding, not because any
+individual defect is interesting.
+
+\begin{table}[t]
+\caption{Defects encountered before the self-improvement path would execute.
+The final column is the point: only two announce themselves. The remainder
+are reported through the same channel as ordinary model failure, so a study
+that read summary statistics rather than container logs would have recorded
+them as the agent performing badly.}
+\label{tab:repro}
+\centering
+\small
+\begin{tabular}{p{0.46\linewidth}p{0.20\linewidth}p{0.26\linewidth}}
+\toprule
+Defect & Location & How it surfaces \\
+\midrule
+Self-improvement container created without host networking, so the agent
+cannot reach the model server &
+container setup &
+Crash (loud) \\
+\addlinespace
+Build staging reused across runs; \texttt{copytree} cannot overwrite git's
+read-only objects &
+image build &
+Task marked failed \\
+\addlinespace
+Exception handler references an unassigned variable, raising a second error
+that replaces the first &
+child sampling &
+Wrong cause reported \\
+\addlinespace
+Seed directory copied \emph{into} an existing output directory rather than
+replacing it, so a rerun reads its predecessor's metadata &
+run initialisation &
+Silently wrong numbers \\
+\addlinespace
+Diagnosis prompt exceeds a 16k context by one token &
+diagnosis &
+Attempt marked failed \\
+\addlinespace
+Diagnosis prompt unbounded ($\approx$130k characters); the upstream
+truncation guard is present but commented out &
+diagnosis &
+Attempt marked failed \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Four of the six are recorded identically to a model that tried and failed
+(Table~\ref{tab:repro}). One is worse than that: copying the seed agent into
+an already-populated output directory leaves the previous run's metadata in
+place, so a repeated run silently inherits its predecessor's seed
+performance. Nothing errors; the numbers are simply wrong. For an
+evolutionary search, whose entire trajectory is conditioned on the archive's
+recorded utilities, this is a contamination path rather than an inconvenience.
+
+The last two entries are properties of the published system rather than of our
+deployment. HGM's diagnosis step concatenates the failing trajectory's full
+chat history with the agent's own source, and the guard that would bound it is
+disabled in the released code:
+
+\begin{quote}\ttfamily\footnotesize
+\# if len(code\_text) > 100000:\\
+\# \ \ \ \ code\_text = code\_text[:100000] + "\textbackslash n<code clipped>"
+\end{quote}
+
+Enabled, that guard would still permit a prompt larger than any context we can
+serve for a 14B model on a single 24\,GB accelerator, and it bounds only the
+smallest of the three large terms. The implication is narrow but real: the
+proposal half of this system presupposes a large-context hosted model, and is
+not runnable as published against a self-hosted one. We bounded the prompt
+explicitly to proceed (budgets in Appendix~\ref{app:budgets}), which means
+the diagnosis model in our runs observes less evidence than its authors
+intended---a limitation we carry forward in~\S\ref{sec:limitations} rather
+than treat as equivalent.
+
+We draw no conclusion about HGM's quality from this. Research code is not
+production code, and every defect above is of a kind that appears in working
+systems. The transferable observation is about \emph{evaluation practice}: a
+self-improving system's failures and its infrastructure's failures arrive
+through the same channel, and only reading trajectories distinguishes them.
+
 \section{Limitations}
+\label{sec:limitations}
 
 \paragraph{Construct.} Distinguishing selection from conditioning uses
 behavioural evidence---whether a later prompt contains a substantial fragment of
@@ -548,5 +858,83 @@ timestamped pre-registration are released together.
 
 \bibliographystyle{plainnat}
 \bibliography{refs}
+
+\appendix
+
+\section{Evaluation set}
+\label{app:tasks}
+
+The 59 unique instances of HGM's own Polyglot baseline subset, by language.
+Exercises recur across languages (\texttt{wordy} appears in four,
+\texttt{poker} and \texttt{react} in three), which is useful: a failure on
+\texttt{wordy} in one language while the same exercise is handled in another
+is unlikely to reflect the problem being intrinsically hard.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lp{0.76\linewidth}}
+\toprule
+Language & Exercises \\
+\midrule
+C++ (5) & all-your-base, bank-account, diamond, gigasecond, queen-attack \\
+\addlinespace
+Go (10) & book-store, connect, counter, crypto-square, dominoes,
+error-handling, food-chain, markdown, transpose, word-search \\
+\addlinespace
+Java (12) & bowling, custom-set, forth, go-counting, ledger, mazy-mice,
+react, rest-api, satellite, sgf-parsing, wordy, zipper \\
+\addlinespace
+JavaScript (10) & bottle-song, forth, grade-school, ocr-numbers,
+queen-attack, robot-name, say, simple-linked-list, triangle, wordy \\
+\addlinespace
+Python (11) & beer-song, dominoes, dot-dsl, food-chain, grade-school, poker,
+scale-generator, sgf-parsing, tree-building, wordy, zipper \\
+\addlinespace
+Rust (11) & accumulate, bowling, doubly-linked-list, gigasecond, macros,
+pig-latin, poker, react, say, variable-length-quantity, wordy \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Verifying that the tool protocol was communicated}
+\label{app:protocol}
+
+Section~\ref{sec:results} claims the model was told the tool-call convention
+and did not follow it. Because the alternative---that our deployment failed
+to advertise the tools---would invalidate the result entirely, we record the
+three checks that rule it out. Each is a script released with the instrument.
+
+\textbf{The template renders the schemas and the convention.} Applying the
+model's own chat template to the agent's tool list produces a system turn of
+2681 characters (164 without tools) containing the full JSON schema for each
+tool inside \texttt{<tools>} tags, followed by the instruction to return
+calls ``within \texttt{<tool\_call></tool\_call>} XML tags'' with a worked
+example. The protocol is stated, not assumed.
+
+\textbf{A single request differing only in policy resolves the ambiguity.}
+Issuing one identical request under each policy returns, under
+\texttt{auto}, \texttt{tool\_calls: None} with a fenced JSON call in the
+message body; under \texttt{required}, a structured call carrying the same
+tool and the same arguments. Intent is constant across the two; only the
+channel changes.
+
+\textbf{The effect is population-level, not anecdotal.} Grading all 118
+stored transcripts yields Tables~\ref{tab:prose} and~\ref{tab:bylang}. We
+report three strictness levels because they license different claims, and
+use only the strictest (\emph{runnable}) when asserting that a call could
+have been dispatched.
+
+\section{Prompt budgets applied to the diagnosis step}
+\label{app:budgets}
+
+For the runs in \S\ref{sec:repro} the diagnosis prompt was bounded to fit
+the served context: 24{,}000 characters of agent source, 32{,}000 of
+trajectory, and 8{,}000 of evaluation log. Clipping retains the head and
+tail of each section rather than truncating the tail, since the opening of a
+trajectory establishes the task and its end shows the failure. As noted
+in~\S\ref{sec:limitations}, this means the diagnosis model observes less
+evidence than the system's authors intended, and results from those runs are
+correspondingly weaker evidence about the method itself.
 
 \end{document}

@@ -1,0 +1,23 @@
+{
+  "_source": "scripts/extract_prose_calls.py, run over the chat-history .md transcripts copied out of each task container for the two `auto` arms (polyglot_s0_59_out = 7B, polyglot_s0_14b_auto_out = 14B), 2026-08-14.",
+  "_definitions": {
+    "structured": "response carried tool_calls != None; this is what the harness acts on",
+    "emitted": "assistant text contains a JSON object naming a known tool",
+    "parses": "that object is valid JSON",
+    "runnable": "names a real tool AND supplies every required argument, so a lenient parser could dispatch it unchanged; NOT a claim the task would then be solved"
+  },
+  "n": 59,
+  "arms": {
+    "7b_auto": {"structured": 0, "emitted": 5, "parses": 2, "runnable": 1},
+    "14b_auto": {"structured": 0, "emitted": 47, "parses": 38, "runnable": 30}
+  },
+  "_by_language_note": "Rules out the objection that the effect is one language's task phrasing. Structured tool calls are 0 in every cell for both models.",
+  "by_language": {
+    "cpp":        {"n": 5,  "14b": {"emitted": 5,  "runnable": 2}, "7b": {"emitted": 0, "runnable": 0}},
+    "go":         {"n": 10, "14b": {"emitted": 10, "runnable": 7}, "7b": {"emitted": 0, "runnable": 0}},
+    "java":       {"n": 12, "14b": {"emitted": 8,  "runnable": 4}, "7b": {"emitted": 1, "runnable": 0}},
+    "javascript": {"n": 10, "14b": {"emitted": 6,  "runnable": 5}, "7b": {"emitted": 1, "runnable": 1}},
+    "python":     {"n": 11, "14b": {"emitted": 8,  "runnable": 4}, "7b": {"emitted": 3, "runnable": 0}},
+    "rust":       {"n": 11, "14b": {"emitted": 10, "runnable": 8}, "7b": {"emitted": 0, "runnable": 0}}
+  }
+}

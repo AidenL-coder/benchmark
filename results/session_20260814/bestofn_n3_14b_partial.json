@@ -1,0 +1,1220 @@
+[
+  {
+    "instance_id": "javascript__queen-attack",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "javascript",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 425,
+      "prompt_tokens": 3821738,
+      "completion_tokens": 14830
+    },
+    "trace_op_counts": {
+      "single_call": 425,
+      "tool_call": 424,
+      "self_consistency": 1
+    },
+    "solution_len": 1477,
+    "elapsed_s": 1189.4
+  },
+  {
+    "instance_id": "rust__wordy",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "rust",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 136,
+      "prompt_tokens": 1055158,
+      "completion_tokens": 19969
+    },
+    "trace_op_counts": {
+      "single_call": 136,
+      "tool_call": 134,
+      "self_consistency": 1
+    },
+    "solution_len": 103546,
+    "elapsed_s": 681.5
+  },
+  {
+    "instance_id": "python__dot-dsl",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "python",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 139,
+      "prompt_tokens": 1212460,
+      "completion_tokens": 19094
+    },
+    "trace_op_counts": {
+      "single_call": 139,
+      "tool_call": 138,
+      "self_consistency": 1
+    },
+    "solution_len": 2922,
+    "elapsed_s": 812.4
+  },
+  {
+    "instance_id": "java__satellite",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "java",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 279,
+      "prompt_tokens": 2178429,
+      "completion_tokens": 16049
+    },
+    "trace_op_counts": {
+      "single_call": 279,
+      "tool_call": 278,
+      "self_consistency": 1
+    },
+    "solution_len": 1939,
+    "elapsed_s": 684.3
+  },
+  {
+    "instance_id": "cpp__diamond",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "cpp",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "error",
+      "error"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 382,
+      "prompt_tokens": 3274473,
+      "completion_tokens": 14335
+    },
+    "trace_op_counts": {
+      "single_call": 382,
+      "tool_call": 381,
+      "self_consistency": 1
+    },
+    "solution_len": 910697,
+    "elapsed_s": 2167.8
+  },
+  {
+    "instance_id": "rust__accumulate",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "rust",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 284,
+      "prompt_tokens": 2480551,
+      "completion_tokens": 12175
+    },
+    "trace_op_counts": {
+      "single_call": 284,
+      "tool_call": 284,
+      "self_consistency": 1
+    },
+    "solution_len": 20607,
+    "elapsed_s": 528.2
+  },
+  {
+    "instance_id": "go__error-handling",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "go",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 287,
+      "prompt_tokens": 2443742,
+      "completion_tokens": 17537
+    },
+    "trace_op_counts": {
+      "single_call": 287,
+      "tool_call": 285,
+      "self_consistency": 1
+    },
+    "solution_len": 976,
+    "elapsed_s": 646.5
+  },
+  {
+    "instance_id": "cpp__queen-attack",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "cpp",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 132,
+      "prompt_tokens": 985066,
+      "completion_tokens": 13605
+    },
+    "trace_op_counts": {
+      "single_call": 132,
+      "tool_call": 130,
+      "self_consistency": 1
+    },
+    "solution_len": 2698,
+    "elapsed_s": 651.0
+  },
+  {
+    "instance_id": "rust__poker",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "rust",
+    "eval_result": "error",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "error",
+      "error",
+      "error"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 73,
+      "prompt_tokens": 586478,
+      "completion_tokens": 40387
+    },
+    "trace_op_counts": {
+      "single_call": 73,
+      "tool_call": 70,
+      "self_consistency": 1
+    },
+    "solution_len": 57861,
+    "elapsed_s": 1144.1
+  },
+  {
+    "instance_id": "python__sgf-parsing",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "python",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "error",
+      "error"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 157,
+      "prompt_tokens": 1390957,
+      "completion_tokens": 30885
+    },
+    "trace_op_counts": {
+      "single_call": 157,
+      "tool_call": 154,
+      "self_consistency": 1
+    },
+    "solution_len": 1800,
+    "elapsed_s": 955.6
+  },
+  {
+    "instance_id": "rust__react",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "rust",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 35,
+      "prompt_tokens": 280382,
+      "completion_tokens": 21214
+    },
+    "trace_op_counts": {
+      "single_call": 35,
+      "tool_call": 34,
+      "self_consistency": 1
+    },
+    "solution_len": 123916,
+    "elapsed_s": 711.2
+  },
+  {
+    "instance_id": "java__ledger",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "java",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "error",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 224,
+      "prompt_tokens": 2083064,
+      "completion_tokens": 16683
+    },
+    "trace_op_counts": {
+      "single_call": 224,
+      "tool_call": 223,
+      "self_consistency": 1
+    },
+    "solution_len": 6067,
+    "elapsed_s": 632.7
+  },
+  {
+    "instance_id": "go__connect",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "go",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 340,
+      "prompt_tokens": 2835828,
+      "completion_tokens": 25558
+    },
+    "trace_op_counts": {
+      "single_call": 340,
+      "tool_call": 339,
+      "self_consistency": 1
+    },
+    "solution_len": 375,
+    "elapsed_s": 852.2
+  },
+  {
+    "instance_id": "rust__macros",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "rust",
+    "eval_result": "error",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "error",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 227,
+      "prompt_tokens": 1811038,
+      "completion_tokens": 13159
+    },
+    "trace_op_counts": {
+      "single_call": 227,
+      "tool_call": 227,
+      "self_consistency": 1
+    },
+    "solution_len": 66834,
+    "elapsed_s": 538.7
+  },
+  {
+    "instance_id": "javascript__triangle",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "javascript",
+    "eval_result": "error",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "error",
+      "error",
+      "error"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 422,
+      "prompt_tokens": 3148912,
+      "completion_tokens": 16230
+    },
+    "trace_op_counts": {
+      "single_call": 422,
+      "tool_call": 421,
+      "self_consistency": 1
+    },
+    "solution_len": 584,
+    "elapsed_s": 664.4
+  },
+  {
+    "instance_id": "java__zipper",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "java",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 208,
+      "prompt_tokens": 2071600,
+      "completion_tokens": 26870
+    },
+    "trace_op_counts": {
+      "single_call": 208,
+      "tool_call": 206,
+      "self_consistency": 1
+    },
+    "solution_len": 4780,
+    "elapsed_s": 900.4
+  },
+  {
+    "instance_id": "java__bowling",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "java",
+    "eval_result": "error",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "error",
+      "error",
+      "error"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 170,
+      "prompt_tokens": 1414105,
+      "completion_tokens": 17854
+    },
+    "trace_op_counts": {
+      "single_call": 170,
+      "tool_call": 169,
+      "self_consistency": 1
+    },
+    "solution_len": 1430,
+    "elapsed_s": 641.5
+  },
+  {
+    "instance_id": "python__tree-building",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "python",
+    "eval_result": "error",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "error",
+      "unresolved",
+      "error"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 170,
+      "prompt_tokens": 1416894,
+      "completion_tokens": 23691
+    },
+    "trace_op_counts": {
+      "single_call": 170,
+      "tool_call": 168,
+      "self_consistency": 1
+    },
+    "solution_len": 2663,
+    "elapsed_s": 780.9
+  },
+  {
+    "instance_id": "javascript__say",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "javascript",
+    "eval_result": "error",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "error",
+      "error",
+      "error"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 604,
+      "prompt_tokens": 5376709,
+      "completion_tokens": 29165
+    },
+    "trace_op_counts": {
+      "single_call": 604,
+      "tool_call": 602,
+      "self_consistency": 1
+    },
+    "solution_len": 307,
+    "elapsed_s": 1033.8
+  },
+  {
+    "instance_id": "java__wordy",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "java",
+    "eval_result": "resolved",
+    "passed": true,
+    "pass_at_n": true,
+    "n_passing_candidates": 1,
+    "per_candidate_eval": [
+      "resolved",
+      "error",
+      "error"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 223,
+      "prompt_tokens": 1748757,
+      "completion_tokens": 23580
+    },
+    "trace_op_counts": {
+      "single_call": 223,
+      "tool_call": 222,
+      "self_consistency": 1
+    },
+    "solution_len": 2284,
+    "elapsed_s": 807.6
+  },
+  {
+    "instance_id": "python__food-chain",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "python",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "error",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 200,
+      "prompt_tokens": 1521285,
+      "completion_tokens": 20051
+    },
+    "trace_op_counts": {
+      "single_call": 200,
+      "tool_call": 199,
+      "self_consistency": 1
+    },
+    "solution_len": 2538,
+    "elapsed_s": 701.5
+  },
+  {
+    "instance_id": "javascript__wordy",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "javascript",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "error"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 143,
+      "prompt_tokens": 1157835,
+      "completion_tokens": 37126
+    },
+    "trace_op_counts": {
+      "single_call": 143,
+      "tool_call": 141,
+      "self_consistency": 1
+    },
+    "solution_len": 1111,
+    "elapsed_s": 1134.3
+  },
+  {
+    "instance_id": "python__poker",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "python",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 291,
+      "prompt_tokens": 2389720,
+      "completion_tokens": 24458
+    },
+    "trace_op_counts": {
+      "single_call": 291,
+      "tool_call": 290,
+      "self_consistency": 1
+    },
+    "solution_len": 294,
+    "elapsed_s": 803.5
+  },
+  {
+    "instance_id": "javascript__grade-school",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "javascript",
+    "eval_result": "error",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "error",
+      "error",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 203,
+      "prompt_tokens": 1597980,
+      "completion_tokens": 15843
+    },
+    "trace_op_counts": {
+      "single_call": 203,
+      "tool_call": 201,
+      "self_consistency": 1
+    },
+    "solution_len": 1160,
+    "elapsed_s": 600.3
+  },
+  {
+    "instance_id": "cpp__gigasecond",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "cpp",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 155,
+      "prompt_tokens": 1293741,
+      "completion_tokens": 15597
+    },
+    "trace_op_counts": {
+      "single_call": 155,
+      "tool_call": 153,
+      "self_consistency": 1
+    },
+    "solution_len": 243271,
+    "elapsed_s": 671.1
+  },
+  {
+    "instance_id": "java__forth",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "java",
+    "eval_result": "error",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "error",
+      "unresolved",
+      "error"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 194,
+      "prompt_tokens": 1692297,
+      "completion_tokens": 27998
+    },
+    "trace_op_counts": {
+      "single_call": 194,
+      "tool_call": 193,
+      "self_consistency": 1
+    },
+    "solution_len": 3787,
+    "elapsed_s": 1005.7
+  },
+  {
+    "instance_id": "python__dominoes",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "python",
+    "eval_result": "error",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "error",
+      "error",
+      "error"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 257,
+      "prompt_tokens": 1967271,
+      "completion_tokens": 13179
+    },
+    "trace_op_counts": {
+      "single_call": 257,
+      "tool_call": 256,
+      "self_consistency": 1
+    },
+    "solution_len": 1262,
+    "elapsed_s": 545.4
+  },
+  {
+    "instance_id": "go__word-search",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "go",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 194,
+      "prompt_tokens": 1157205,
+      "completion_tokens": 20654
+    },
+    "trace_op_counts": {
+      "single_call": 194,
+      "tool_call": 194,
+      "self_consistency": 1
+    },
+    "solution_len": 3325,
+    "elapsed_s": 731.5
+  },
+  {
+    "instance_id": "javascript__simple-linked-list",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "javascript",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "error"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 711,
+      "prompt_tokens": 6724378,
+      "completion_tokens": 25535
+    },
+    "trace_op_counts": {
+      "single_call": 711,
+      "tool_call": 710,
+      "self_consistency": 1
+    },
+    "solution_len": 2280,
+    "elapsed_s": 1013.2
+  },
+  {
+    "instance_id": "go__counter",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "go",
+    "eval_result": "resolved",
+    "passed": true,
+    "pass_at_n": true,
+    "n_passing_candidates": 3,
+    "per_candidate_eval": [
+      "resolved",
+      "resolved",
+      "resolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 405,
+      "prompt_tokens": 3524414,
+      "completion_tokens": 25094
+    },
+    "trace_op_counts": {
+      "single_call": 405,
+      "tool_call": 403,
+      "self_consistency": 1
+    },
+    "solution_len": 1786,
+    "elapsed_s": 899.0
+  },
+  {
+    "instance_id": "java__react",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "java",
+    "eval_result": "error",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "error",
+      "error",
+      "error"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 226,
+      "prompt_tokens": 1561612,
+      "completion_tokens": 13099
+    },
+    "trace_op_counts": {
+      "single_call": 226,
+      "tool_call": 226,
+      "self_consistency": 1
+    },
+    "solution_len": 2924,
+    "elapsed_s": 531.1
+  },
+  {
+    "instance_id": "javascript__ocr-numbers",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "javascript",
+    "eval_result": "error",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "error",
+      "error",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 179,
+      "prompt_tokens": 1250819,
+      "completion_tokens": 24480
+    },
+    "trace_op_counts": {
+      "single_call": 179,
+      "tool_call": 178,
+      "self_consistency": 1
+    },
+    "solution_len": 1601,
+    "elapsed_s": 795.4
+  },
+  {
+    "instance_id": "python__scale-generator",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "python",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 153,
+      "prompt_tokens": 1051437,
+      "completion_tokens": 8230
+    },
+    "trace_op_counts": {
+      "single_call": 153,
+      "tool_call": 153,
+      "self_consistency": 1
+    },
+    "solution_len": 1654,
+    "elapsed_s": 404.6
+  },
+  {
+    "instance_id": "java__go-counting",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "java",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 289,
+      "prompt_tokens": 2960912,
+      "completion_tokens": 30398
+    },
+    "trace_op_counts": {
+      "single_call": 289,
+      "tool_call": 287,
+      "self_consistency": 1
+    },
+    "solution_len": 3373,
+    "elapsed_s": 1091.3
+  },
+  {
+    "instance_id": "rust__doubly-linked-list",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "rust",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 44,
+      "prompt_tokens": 376742,
+      "completion_tokens": 14063
+    },
+    "trace_op_counts": {
+      "single_call": 44,
+      "tool_call": 44,
+      "self_consistency": 1
+    },
+    "solution_len": 34179,
+    "elapsed_s": 524.4
+  },
+  {
+    "instance_id": "python__grade-school",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "python",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "error",
+      "error"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 226,
+      "prompt_tokens": 1843605,
+      "completion_tokens": 13441
+    },
+    "trace_op_counts": {
+      "single_call": 226,
+      "tool_call": 224,
+      "self_consistency": 1
+    },
+    "solution_len": 1097,
+    "elapsed_s": 541.2
+  },
+  {
+    "instance_id": "javascript__forth",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "javascript",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 177,
+      "prompt_tokens": 1108747,
+      "completion_tokens": 17312
+    },
+    "trace_op_counts": {
+      "single_call": 177,
+      "tool_call": 177,
+      "self_consistency": 1
+    },
+    "solution_len": 28793499,
+    "elapsed_s": 708.7
+  },
+  {
+    "instance_id": "python__wordy",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "python",
+    "eval_result": "error",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "error",
+      "error",
+      "error"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 223,
+      "prompt_tokens": 1869085,
+      "completion_tokens": 9398
+    },
+    "trace_op_counts": {
+      "single_call": 223,
+      "tool_call": 223,
+      "self_consistency": 1
+    },
+    "solution_len": 1060,
+    "elapsed_s": 453.3
+  },
+  {
+    "instance_id": "java__mazy-mice",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "java",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": true,
+    "n_passing_candidates": 1,
+    "per_candidate_eval": [
+      "unresolved",
+      "resolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 171,
+      "prompt_tokens": 1581078,
+      "completion_tokens": 18261
+    },
+    "trace_op_counts": {
+      "single_call": 171,
+      "tool_call": 169,
+      "self_consistency": 1
+    },
+    "solution_len": 3364,
+    "elapsed_s": 694.1
+  },
+  {
+    "instance_id": "cpp__bank-account",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "cpp",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "error",
+      "error"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 705,
+      "prompt_tokens": 7157332,
+      "completion_tokens": 26085
+    },
+    "trace_op_counts": {
+      "single_call": 705,
+      "tool_call": 702,
+      "self_consistency": 1
+    },
+    "solution_len": 786720,
+    "elapsed_s": 1020.5
+  },
+  {
+    "instance_id": "python__zipper",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "python",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 303,
+      "prompt_tokens": 2825620,
+      "completion_tokens": 15326
+    },
+    "trace_op_counts": {
+      "single_call": 303,
+      "tool_call": 302,
+      "self_consistency": 1
+    },
+    "solution_len": 2250,
+    "elapsed_s": 633.2
+  },
+  {
+    "instance_id": "java__custom-set",
+    "model": "Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+    "agent_src": "toolcheck_agent_src",
+    "n_candidates_cfg": 3,
+    "language": "java",
+    "eval_result": "unresolved",
+    "passed": false,
+    "pass_at_n": false,
+    "n_passing_candidates": 0,
+    "per_candidate_eval": [
+      "unresolved",
+      "unresolved",
+      "unresolved"
+    ],
+    "error": null,
+    "usage": {
+      "calls": 668,
+      "prompt_tokens": 5964117,
+      "completion_tokens": 22541
+    },
+    "trace_op_counts": {
+      "single_call": 668,
+      "tool_call": 666,
+      "self_consistency": 1
+    },
+    "solution_len": 2511,
+    "elapsed_s": 958.7
+  }
+]

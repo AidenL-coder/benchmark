@@ -171,6 +171,28 @@ second stop after this file.
 > `expand()` fix against a live all-zero-utility archive**, which until then
 > had only been checked against an isolated reproduction.
 >
+> **READ D-49 BEFORE USING ANY `tool_choice="auto"` NUMBER.** The 0-tool-call
+> result (D-44) was measured correctly and *interpreted* wrongly, and the
+> wrong interpretation was the paper's headline until 2026-08-14. The model
+> is not declining to act: under `auto` the 14B emits a well-formed tool call
+> as **fenced JSON in the message body** on 47/59 tasks (30/59 name a real
+> tool with every required argument), while structured `tool_calls` is 0/59.
+> The 7B genuinely does not act (5/59 attempted). So one recorded zero covers
+> two unrelated failures. Verified three ways — `scripts/check_tool_template.py`
+> (the template *does* render the schemas and state the `<tool_call>`
+> convention, so configuration is exonerated), `scripts/verify_tool_zero.py`
+> (one request per policy, same intent, different channel), and
+> `scripts/extract_prose_calls.py` (counts over all 118 stored transcripts;
+> results in `results/prose_toolcalls.json`). Corrected in the paper and in
+> `preregistration.md` §4.2, which now carries a dated amendment.
+> **`tool_choice="required"` works by constraining decoding to the tool-call
+> grammar — it repairs protocol compliance, not volition. Do not claim it
+> makes the agent decide to act.** Novelty is bounded: `kokane2024toolscan`
+> already catalogues invalid output formatting; ours is its consequence
+> inside a self-improving loop. The transferable lesson, per D-49: **read raw
+> trajectories for the headline result, not only when something errors** —
+> the `auto` arms never errored, so nobody opened them for four months.
+>
 > **Three things a later session must not miss.** (1) `hgm_B`'s vLLM runs at
 > `--max-model-len 32768`, *not* the 16384 every §4.1 arm used, because
 > HGM's diagnosis prompt does not fit otherwise; the `4/59` figure from the

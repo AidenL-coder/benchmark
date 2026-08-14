@@ -267,6 +267,56 @@ been unavailable had the prediction not been registered first: the
 comfortable post-hoc story ("a 7B is simply too weak to be an agent") was
 both available and false.
 
+---
+
+#### Amendment, 2026-08-14: the measure used to score Prediction 2 was defective
+
+**The scoring above stands as recorded and is not revised.** What follows is
+added, not substituted — the prediction was falsified against the measure
+declared in §4.1, and that remains the registered outcome. But the measure
+itself has since been shown inadequate, and leaving that unstated would
+misrepresent what was learned.
+
+§4.1 operationalised "tool use" as **structured `tool_calls`** — the field
+HGM's agent loop dispatches on. Reading the container transcripts (not done
+at scoring time, because the `auto` arms produced no errors to investigate)
+shows the 14B model *attempting* tool calls on **47/59 tasks**, of which
+**30/59** name a real tool with every required argument and would have been
+dispatched by a lenient parser. The 7B model attempts 5/59, runnable 1/59.
+Structured `tool_calls` is 0/59 in both arms and in all six languages.
+
+Consequences for the record, stated plainly:
+
+1. **The prediction's substance was correct; its operationalisation was
+   blind.** "The larger model will show non-zero tool use" is true by a wide
+   margin (47 vs 5) under any measure that inspects behaviour rather than
+   the API field.
+2. **"Identical in every cell" is true only of recorded cells.** The two
+   arms differ roughly tenfold in attempted actions. The claim as written in
+   §4.2 is not wrong, but it is narrower than it reads.
+3. **The interpretation above is now overstated and is corrected here.** The
+   tool policy does not determine whether the agent *acts*; it determines
+   whether the harness can *observe* an attempt. `tool_choice="required"`
+   works by constraining decoding to the tool-call grammar, so it repairs
+   protocol compliance rather than inducing volition. No claim that the
+   policy changes the model's disposition to act is supported by these data.
+4. **This is the same failure mode the study is about.** A pre-registered
+   measure and a scaffold's selection signal failed identically, and for the
+   same reason: both were defined over what the system records rather than
+   what the agent does. We report it as such rather than as an incidental
+   correction.
+
+Verification supporting the amendment (all re-runnable):
+`scripts/check_tool_template.py` confirms the chat template renders the tool
+schemas and states the `<tool_call>` convention, so the model was told the
+protocol; `scripts/verify_tool_zero.py` sends one identical request under
+each policy, returning fenced JSON under `auto` and the same intent as a
+structured call under `required`; `scripts/extract_prose_calls.py` produces
+the counts above from the stored transcripts. Measurements are recorded in
+`results/prose_toolcalls.json`.
+
+**No threshold, arm, or §3 value is changed by this amendment.**
+
 **Prediction 3 held as stated** (no prediction was registered about
 absolute resolve rates, and none is claimed). For completeness: the
 resolve-rate difference between `7B × auto` and `7B × required` is 0/59 vs

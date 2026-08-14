@@ -3045,6 +3045,81 @@ performing badly, and bugs 3 and 5 would additionally have reported the
 
 ---
 
+## D-49 — the 0-tool-call result measured the wrong thing; what it actually
+shows, and how the error survived four months · **C**
+
+**Prompted by the user asking whether the test had been done wrong.** It had
+not been *configured* wrong. It had been *read* wrong, and the reading was
+the paper's headline.
+
+**What was believed**: under `tool_choice="auto"` the frozen model "does
+nothing" — 0 tool calls, 59/59 `empty_patch`, identical at 7B and 14B (D-44).
+The interpretation attached to it was that the model fails to recognise it is
+the agent.
+
+**What is actually true**, established 2026-08-14 by three independent
+checks rather than by re-reading the design:
+
+1. `scripts/check_tool_template.py` — the Qwen chat template renders the full
+   tool schemas inside `<tools>` tags and states the required
+   `<tool_call>...</tool_call>` convention with a worked example (2681 chars
+   rendered with tools vs 164 without). **The model was given the schemas and
+   told the protocol.** Configuration is exonerated.
+2. `scripts/verify_tool_zero.py` — one identical request under each policy.
+   Under `auto`: `tool_calls: NONE`, and the *content* contains
+   `{"name": "editor", "arguments": {"command": "view", "path": ...}}` in a
+   markdown fence. Under `required`: `tool_calls: ['editor']` with the same
+   arguments. **Same intent, different channel.**
+3. `scripts/extract_prose_calls.py` over the stored transcripts — 14B `auto`
+   emits a tool-call object on **47/59** tasks, 38 parse as JSON, **30 name a
+   real tool with every required argument**. 7B `auto`: 5 / 2 / 1. Structured
+   `tool_calls` is 0/59 in both. Per-language in `results/
+   prose_toolcalls.json`: the 14B attempts in all six languages, so it is not
+   one language's phrasing.
+
+**So the zero conceals two unrelated failures.** The 7B writes prose for a
+human reader ("To integrate this into your project, you can create a new
+Python file...") — that model genuinely does not act. The 14B selects the
+right tool and arguments, says it will edit the repository, and fails only on
+serialisation. The harness records both identically.
+
+**Three claims were wrong and are now corrected in the paper and in
+`preregistration.md` §4.2**: that the model "fails to recognise it is the
+agent" (true only of the 7B); that 14B is "identical to 7B in every cell"
+(true of *recorded* cells, false behaviourally, 47 vs 5); and that tool
+policy determines whether the agent *acts* — `required` works by constraining
+decoding to the tool-call grammar, so it repairs protocol compliance, not
+volition. That last one had been the paper's central sentence.
+
+**Novelty, checked before claiming any**: `kokane2024toolscan` already
+catalogues *invalid output formatting* as one of seven tool-use error
+patterns, explicitly covering markdown/unstructured JSON in place of
+structured calls. The phenomenon is **not ours**, and the paper now says so
+in those words. What survives is the consequence in a setting ToolScan does
+not consider: inside a self-improving loop, this failure drives archive
+utility to a constant and halts the search that consumes it — which is also
+the mechanical cause of the D-41 crash.
+
+**Why it survived so long, which is the part worth keeping.** The
+interception layer (D-24) was built so an evolved scaffold could not lie
+about its own operations. It records the wire faithfully — and `tool_calls`
+was read off the wire and treated as "did the agent try." An interception
+layer is an honest witness to the *protocol*, not to *intent*. Compounding
+it: transcripts were only ever opened when something errored (that is how
+D-43 and D-46 were found), and the `auto` arms never errored. A clean,
+uniform, non-crashing result was accepted precisely because it was clean and
+uniform — and the total uniformity (per-task call distribution exactly `{1}`
+across 59 tasks and 6 languages) was cited in the paper as *strength of
+evidence* when it should have prompted suspicion that one thing was being
+measured rather than a robust phenomenon observed.
+
+**Rule going forward**: read raw trajectories for the *headline* result, not
+only for failures. D-37's own stated discipline — check the real output file,
+don't trust the summary — had been applied to crashes and never to the
+finding itself.
+
+---
+
 ## Still open
 
 | # | Decision | Status | Needed by |

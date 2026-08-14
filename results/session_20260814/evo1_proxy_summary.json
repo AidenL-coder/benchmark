@@ -1,0 +1,15 @@
+{
+  "run_label": "evo1",
+  "calls_total": 12804,
+  "calls_ok": 12663,
+  "calls_failed": 141,
+  "calls_with_tool_calls": 12645,
+  "prompt_tokens": 202924693,
+  "completion_tokens": 717137,
+  "hgm_exit_code": -15,
+  "elapsed_hours": 9.02,
+  "trace_op_counts": {
+    "single_call": 12663,
+    "tool_call": 28
+  }
+}
