@@ -304,6 +304,75 @@ reported separately as `wrong-artifact`).
 
 ---
 
+### 4.3 Minimal evolutionary run — declared 2026-08-12, **before** running it
+
+Registered before any `sample_child` call has ever executed. Nothing in this
+section has been observed; it is written to constrain what we may later
+claim, and to make a null result reportable rather than a failure.
+
+**Why this run is now possible at all, and why that matters for
+interpretation.** §4.2 established that under the unmodified default policy
+the frozen model scores 0/59 on Polyglot. HGM's `expand()` samples only
+archive nodes of *strictly positive* utility, so at a uniformly-zero signal
+the candidate set is always empty and the search cannot take its first step
+(the D-41 crash). The evolutionary experiment was therefore not merely
+unrun but **structurally impossible under the default configuration**. The
+`required` arm scores 2/59 (7B) and 4/59 (14B), which is non-degenerate.
+This run is only viable because of that, and the paper must say so rather
+than presenting the seed choice as routine.
+
+**Fixed configuration, declared now:**
+
+| Parameter | Value |
+|---|---|
+| Frozen model | `Qwen2.5-Coder-14B-Instruct-AWQ` (best measured seed utility) |
+| Seed agent | `toolcheck_agent_src` (the `required` variant), **not** the default |
+| Task substrate | The same frozen 59-task Polyglot subset used throughout |
+| Diagnosis model | The same local frozen model — **no hosted model**, so the loop remains fully self-hosted and no un-frozen component enters |
+| Generations | 2–3, budget permitting; whatever completes is reported |
+| Seeds | ≥1. Amended 2026-08-13, **still before any `sample_child` has executed**: additional independent seeds will be run if GPU budget permits, and *every* completed seed is reported, including ones that contradict the others. The amendment only raises intended sample size; no threshold, prediction, or outcome mapping is changed. If exactly one seed completes, that single-run limitation is stated, not glossed. |
+| Instrumentation | `fork_bridge` network-layer interception throughout |
+
+**Declared predictions:**
+
+1. The loop will complete at least one `sample_child` → evaluate cycle
+   without the D-41 crash. *(If it crashes for a new reason, that is
+   reported as the result of this run.)*
+2. Any child that improves measured resolve rate will do so **without**
+   requiring a support-expanding operation the seed lacked — i.e. we predict
+   **no frontier crossing** at this scale. This is the falsifiable one.
+3. No prediction is registered about the magnitude of any improvement.
+
+**Analysis plan, fixed in advance:**
+
+- Primary quantity: per-generation resolve rate on the 59-task set, with
+  Clopper–Pearson intervals, compared against the seed's own 4/59.
+- Every child's operations are classified by interception (never
+  self-report), and any resolve-rate gain is decomposed against the
+  `S0` / best-of-N elicitation ladder from §4.1 and D-47 before being
+  attributed to evolution.
+- **A gain that does not exceed the best-of-N elicitation control at
+  matched compute is reported as elicitation, not capability expansion.**
+- Infrastructure failures follow the D-43/D-46 rules already fixed:
+  `incomplete` excluded, `error` counted as unresolved.
+
+**What we will conclude from each outcome, committed now:**
+
+| Outcome | Reported conclusion |
+|---|---|
+| No child beats the seed | Null: no evidence of improvement at this scale/budget. Reported as such. |
+| Child beats seed, but ≤ best-of-N control | Elicitation, not expansion — the headline interpretation. |
+| Child beats seed *and* control, no expanding op required | Better search, not capability expansion. |
+| Child beats both *and* ablation shows an expanding op was necessary | Candidate frontier crossing — reported as a single-seed, single-fork, one-task-family observation requiring replication, **not** as a general claim. |
+
+**Scope limits stated in advance:** one seed, one fork, one model, one task
+family, 2–3 generations. This cannot support a general claim about
+self-improving agents, and no such claim will be made from it. It is a
+demonstration that the instrument produces an interpretable decomposition on
+a real evolutionary run.
+
+---
+
 ## 5. Primary and secondary outcomes
 
 **Primary.** Frontier-crossing rate on beyond-frontier held-out tasks, at matched

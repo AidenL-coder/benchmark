@@ -1,12 +1,29 @@
 % NeurIPS 2026 Workshop submission --- "Managing Agents that Manage Agents:
 % Responsible Use of Meta-Agents". Non-archival; deadline 2026-08-29 AoE.
-% Requires neurips_2026.sty (drop into this directory before compiling).
+%
+% STYLE FILE: for the actual submission, download the official
+% neurips_2026.sty from the NeurIPS site and drop it beside this file; it is
+% then picked up automatically. Until then the fallback below makes the draft
+% compile anywhere (Overleaf included) with approximately the right look, so
+% the text can be read and edited without waiting on the style file.
+% DO NOT SUBMIT the fallback rendering -- the official style controls margins,
+% fonts, and the line-numbering/anonymity behaviour reviewers expect.
 %
 % STATUS MARKERS: \todoresult{} marks a number not yet measured. Every one
 % must be resolved or the surrounding claim cut before submission.
 
 \documentclass{article}
-\usepackage[final]{neurips_2026}
+
+\IfFileExists{neurips_2026.sty}{%
+  \usepackage[final]{neurips_2026}%
+}{%
+  % ---- Fallback preamble (official style file absent) -------------------
+  \usepackage[margin=1.25in]{geometry}
+  \usepackage{natbib}          % neurips_2026.sty normally provides \citep
+  \renewcommand{\baselinestretch}{1.02}
+  \setlength{\parskip}{2pt}
+  \typeout{^^JNOTE: neurips_2026.sty not found -- using draft fallback.^^J}
+}
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -25,13 +42,16 @@
 \newcommand{\Sstar}{\ensuremath{S_*}}
 \newcommand{\Sevo}{\ensuremath{S_{\mathrm{evo}}}}
 
-\title{Zero Tool Calls: Scaffold Policy, Not Model Scale,\\
-Determines Whether a Coding Agent Acts}
+\title{Zero Actions: A Published Self-Improving Agent Scaffold Takes\\
+No Tool Calls at 7B and 14B Scale---and Pass Rate Cannot Tell}
 
+% NOTE: do not begin a line here with a bare "[" directly after "\\" --
+% LaTeX parses "\\[...]" as an optional vertical-space argument and fails
+% with "Illegal unit of measure". Braces around the placeholders avoid it.
 \author{%
-  [Author Name] \\
-  [Affiliation] \\
-  \texttt{[email]} \\
+  {Author Name} \\
+  {Affiliation} \\
+  \texttt{author@example.edu}
 }
 
 \begin{document}
@@ -39,36 +59,35 @@ Determines Whether a Coding Agent Acts}
 \maketitle
 
 \begin{abstract}
-Self-improving coding agents in the Darwin--G\"odel Machine (DGM) family wrap a
-\emph{frozen} foundation model in a scaffold permitted to rewrite itself, and
-report large benchmark gains as evidence of self-improvement. We argue these
-gains are currently unattributable: no published system in this family
-independently estimates what the frozen model alone can reach, so a measured
-delta cannot be separated from better \emph{elicitation} of latent capability.
-We present two contributions. First, an instrument that makes the distinction
-measurable: matched-compute elicitation controls, operation tagging enforced by
-\emph{network-layer interception} rather than agent self-report, causal ablation
-that withholds a capability rather than requesting its disuse, and
+We run the unmodified default agent of a published, award-recognised
+self-improving coding system (HGM) on \emph{its own} 59-task Polyglot
+baseline, with a frozen \texttt{Qwen2.5-Coder-7B-Instruct}, and observe
+\textbf{zero}: 0/59 tasks resolved, 0 tool calls, 59/59 empty patches,
+uniform across six languages with no exception. The model is not failing at
+code: it emits a mean of 902 tokens of competent analysis per task, then
+stops without editing a file, in one case politely instructing the user to
+apply its patch by hand. \textbf{Doubling model scale does not help}:
+\texttt{Qwen2.5-Coder-14B} reproduces the 7B result in every cell, falsifying
+a prediction we registered in advance. What does help is a two-line harness
+edit (\texttt{tool\_choice} \texttt{"auto"}$\to$\texttt{"required"}), which
+moves the same model to 59/59 tasks using tools and 3663 tool calls
+($p = 3.4\times10^{-13}$).
+
+The consequence for meta-agent evaluation is the point of this paper. These
+two behaviourally opposite configurations are \emph{statistically
+indistinguishable in pass rate} ($2/59$ vs $0/59$, $p = 0.50$) despite
+differing $62\times$ in consumed compute. Pass rate, the signal DGM, HGM,
+and SICA all select on, cannot see whether the agent is an agent, and the
+resulting all-zero utility is mechanically why the forked search crashes
+before its first expansion step. Forcing tool use also does not confer
+task competence: in 9/59 cases the agent worked hard but wrote a file of its
+own naming, often in the wrong language entirely, leaving nothing gradeable.
+We therefore argue that reported self-improvement gains are currently
+unattributable, and contribute the instrument the attribution requires:
+matched-compute elicitation controls, operation tagging enforced by
+\emph{network-layer interception} rather than agent self-report, causal
+ablation that withholds a capability rather than requesting its disuse, and
 frontier estimation with non-parametric coverage bounds---all pre-registered.
-Second, a cautionary empirical result obtained while validating it. Running the
-unmodified default agent of a current DGM-family system (HGM) on its own
-59-task Polyglot baseline with a frozen \texttt{Qwen2.5-Coder-7B-Instruct}, we
-observe \textbf{0/59 tasks resolved and 0 tool calls}: the model emits a mean of
-902 tokens of competent analysis per task and never edits a file---in one case
-politely instructing the user to apply its patch by hand. Changing
-\textbf{two lines}---\texttt{tool\_choice="auto"} to \texttt{"required"}, with
-model, tasks, and all other scaffold code held fixed---moves this to
-\textbf{59/59} tasks using tools and 3663 tool calls
-($p = 3.4\times10^{-13}$, non-overlapping intervals). Doubling model scale
-does not: \texttt{Qwen2.5-Coder-14B} under the default policy reproduces the
-7B result in every cell (0/59 resolved, 0/59 tool use), falsifying a
-prediction we registered in advance. Yet the two behaviourally-opposite
-scaffolds are statistically indistinguishable in \emph{pass rate}
-($2/59$ vs $0/59$, $p = 0.50$) despite a $62\times$ difference in consumed
-compute. The property that decides whether an agent is an agent is thus
-invisible to the objective that DGM, HGM, and SICA all select on---and the
-resulting all-zero signal is mechanically why the search implementation we
-forked crashes before its first expansion step.
 \end{abstract}
 
 \section{Introduction}
@@ -99,16 +118,31 @@ model doing nothing it could not already do:
 \end{enumerate}
 
 None of these is self-improvement in the sense the framing implies, and
-aggregate pass-rate comparison---current practice---cannot distinguish them from
+aggregate pass-rate comparison (current practice) cannot distinguish them from
 genuine capability expansion.
 
-This paper makes two contributions. Section~\ref{sec:instrument} describes an
-instrument built to make the distinction measurable, designed to attach to an
-existing, independently-implemented loop rather than to a system co-designed
-with its own evaluation. Section~\ref{sec:results} reports a result obtained
-while validating that instrument which we believe is of independent interest:
-the scaffold--model interaction term in this literature is large enough to
-dominate the effects being reported.
+Our central empirical claim (Section~\ref{sec:results}) is not that a
+tool-policy flag changes tool use, which is definitional, but three
+things that are not:
+
+\begin{enumerate}
+\item A \emph{published, award-recognised} system's own default agent produces
+  \textbf{no actions whatsoever} on \emph{its own} benchmark at 7B and 14B
+  scale. Not degraded performance: zero tool calls, zero non-empty patches,
+  59/59 tasks, six languages.
+\item \textbf{Scale does not rescue it.} We registered the opposite prediction
+  in advance and report it falsified.
+\item \textbf{Pass rate cannot detect any of this.} Two configurations
+  differing totally in behaviour and $62\times$ in compute are statistically
+  indistinguishable in the very signal used to select between
+  scaffolds---so a search optimising it is blind to the property that
+  determines whether its agent acts at all.
+\end{enumerate}
+
+Section~\ref{sec:instrument} describes the instrument that makes such
+attribution measurable, designed to attach to an existing,
+independently-implemented loop rather than to a system co-designed with its
+own evaluation.
 
 \section{Related work}
 
@@ -122,7 +156,7 @@ explicitly lists fixed evaluation protocols as a limitation.
 
 The comparison structure is worth stating precisely, since HGM is both the
 strongest result in this family and the system we fork. Its evaluation compares
-three \emph{evolutionary} methods---SICA, DGM, and HGM---from an identical
+three \emph{evolutionary} methods (SICA, DGM, and HGM) from an identical
 initial agent. The sole human-engineered reference point is a leaderboard
 comparison against SWE-agent \citep{yang2024sweagent}, which uses a different
 backbone at an unmatched compute budget. There is therefore no condition in
@@ -134,8 +168,10 @@ is a gain \emph{over} is a moving scaffold, not a characterised model ceiling.
 Recent benchmarks target adjacent axes: EvoAgentBench
 \citep{gao2026evoagentbench} measures transfer of extracted ``abilities''
 across model families; SEA-Eval \citep{seaeval2026} measures success rate
-against token cost over sequential task streams. Neither estimates a
-frozen-model frontier nor attributes gains between elicitation and expansion.
+against token cost over sequential task streams. On the basis of their
+abstracts and summaries (we have not yet read either in full), neither
+appears to estimate a frozen-model frontier or to attribute gains between
+elicitation and expansion.
 
 \paragraph{Elicitation gaps.}
 Work on scaffold-induced performance variation \citep{starace2026scaffold}
@@ -150,8 +186,14 @@ with no frontier-crossing concept.
 Table~\ref{tab:gap} summarises the gap.
 
 \begin{table}[t]
-\caption{Methodological coverage in closely related work. $\dagger$ read at
-abstract level only at time of writing.}
+\caption{Methodological coverage in closely related work. Entries record
+whether each paper's \emph{own reported evaluation} includes the control,
+not whether its authors would consider it necessary. Verification basis is
+stated explicitly because these are claims about absence: HGM, SICA,
+Hyperagents and \citet{iscan2026placebo} were checked against full text;
+$\dagger$ marks papers assessed from abstract and summary only at time of
+writing, where absence should be read as ``not found'' rather than
+``confirmed absent''.}
 \label{tab:gap}
 \centering
 \small
@@ -177,7 +219,7 @@ SEA-Eval$\dagger$      & --- & --- & --- & --- & --- \\
 \label{sec:instrument}
 
 \paragraph{Scaffold ladder.}
-\Sz{} is the minimal scaffold---one trajectory, no retries, no selection---and
+\Sz{} is the minimal scaffold (one trajectory, no retries, no selection), and
 by construction \emph{defines} the frontier against which everything else is
 measured. \Sstar{} is a strong, fixed, hand-authored baseline (best-of-$N$,
 execution feedback against public tests only, tool use, self-consistency). Its
@@ -191,7 +233,7 @@ tasks,'' not ``report your own operations honestly''; a variant that omitted
 tagging an expanding operation would face no pressure against doing so. We
 therefore never rely on instrumentation \emph{inside} the agent. Because
 forked agents run as separate OS processes inside Docker, we intercept at the
-only remaining boundary---the network---using a transparent reverse proxy
+only remaining boundary, the network, using a transparent reverse proxy
 between container and model server that records every request/response pair.
 Operations are then classified post hoc from what was observed. Each
 intercepted operation is labelled \emph{support-preserving} (selection,
@@ -240,6 +282,20 @@ task set, and the grading harness are identical.
 
 \subsection{Results}
 
+\IfFileExists{fig1_asymmetry.pdf}{%
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{fig1_asymmetry.pdf}
+\caption{The same two-line scaffold change, measured two ways, on a shared
+$0$--$59$ axis. Left: whether the agent takes any action at all. Right:
+whether it solves the task. Both model scales behave identically under the
+default policy (both at zero, left panel), so the separation is produced by
+the tool policy rather than by capability. Plotting both panels on one scale
+is deliberate: on its own axis the right-hand panel would look like a large
+effect, which is the misreading this paper argues against.}
+\label{fig:asymmetry}
+\end{figure}}{}
+
 \begin{table}[t]
 \caption{\Sz{} on the 59-task Polyglot baseline. ``Used tools'' counts tasks
 with at least one intercepted tool call. Intervals are Clopper--Pearson 95\%.}
@@ -258,7 +314,7 @@ Arm & $n$ & Resolved & Used tools & Tool calls & Generations \\
 \end{tabular}
 \end{table}
 
-\paragraph{The default scaffold produces no actions.}
+\paragraph{Behaviour under the default policy.}
 Under HGM's unmodified \texttt{tool\_choice="auto"} default, the frozen 7B model
 resolved \textbf{0 of 59} tasks and made \textbf{0 tool calls}, uniformly across
 all six languages. The uniformity is total: across all 59 tasks the distribution
@@ -267,8 +323,8 @@ lengths $\{0\}$. Not one task deviated.
 
 The failure mode is not incompetence at coding. The model emits a mean of 902
 completion tokens per task (median 807, range 356--2371) of coherent,
-well-structured analysis---restating the problem, sketching an algorithm, and
-often writing a plausible full solution---then terminates with
+well-structured analysis: restating the problem, sketching an algorithm, and
+often writing a plausible full solution, then terminates with
 \texttt{finish\_reason="stop"} and \texttt{tool\_calls=None}. Since no file is
 modified, the diff is empty and the task fails before any test executes.
 
@@ -290,7 +346,17 @@ a repository. It has not failed to solve the problem; it has failed to
 recognise that it is the agent. This is a scaffold--model interface failure,
 and it is invisible to any evaluation that reports only pass rate.
 
-\paragraph{Two lines change the regime.}
+\paragraph{Effect of the tool-policy flag.}
+That setting \texttt{tool\_choice="required"} increases tool calls is
+definitional. Three things about \emph{how} it
+lands are not definitional, and are what we report: the baseline it moves from
+is exactly zero rather than merely low; the same flag is what separates ``this
+system does nothing'' from ``this system solves tasks'' on a benchmark the
+system's authors chose; and, as the implications below show, the
+change is invisible to pass rate. A flag whose effect is definitional at the
+behavioural level can still be undetectable at the level a search actually
+optimises---that gap is the finding.
+
 Switching \texttt{tool\_choice} from \texttt{"auto"} to \texttt{"required"},
 with everything else byte-identical, moves the 7B agent from 0 tool calls to
 3663 across the same 59 tasks---every single task using tools, in every
@@ -300,7 +366,9 @@ test verdicts: 53 of 59 tasks yield a non-empty diff, and the modal outcome
 changes from \texttt{empty\_patch} (59/59) to \texttt{unresolved} (51/59).
 Two tasks are solved outright. The 14B model behaves the same way under the
 same flag (5592 tool calls, 4 solved), so the effect is a property of the
-policy, not of a particular model.
+policy, not of a particular model. Figure~\ref{fig:asymmetry} plots both
+measurements on a common axis: the same intervention that saturates the
+behavioural panel barely lifts the resolve-rate panel off zero.
 
 \paragraph{A pre-registered prediction, and its falsification.}
 Before running the larger-model arms we registered the prediction that
@@ -316,13 +384,13 @@ the agent acts is the scaffold's tool policy, not the model's capability.
 
 We report this because it is the more useful result, and because reporting it
 is the point of registering predictions in advance. Had we not written the
-prediction down, the natural post-hoc framing---``a 7B model is too weak to be
-an agent''---would have been available, comfortable, and wrong.
+prediction down, the natural post-hoc framing (``a 7B model is too weak to be
+an agent'') would have been available, comfortable, and wrong.
 
 \paragraph{A third failure mode: acting on the wrong artifact.}
 Forcing tool use does not make the agent competent at the task
 \emph{interface}. In 9 of 59 cases in the 14B \texttt{required} arm, the agent
-worked productively---tens to hundreds of tool calls---but created a
+worked productively (tens to hundreds of tool calls) but created a
 \emph{new file of its own naming} rather than editing the exercise's declared
 solution files. Frequently the new file was in the wrong language entirely:
 \texttt{diamond\_kata.py} for the C++ task \texttt{cpp\_\_diamond},
@@ -347,8 +415,11 @@ tried and been wrong.
 
 \subsection{Implications}
 
-\paragraph{The scaffold, not the model, decides whether an agent acts.}
-The completed $2\times2$ separates cleanly. Tool policy predicts agentic
+\paragraph{Scaffold policy versus model scale.}
+The claim here is regime-relative: what follows holds for the
+two model scales, one task family, and one forked system tested here, and we
+do not claim scaffold dominates model capability in general. Within that
+scope the $2\times2$ separates cleanly. Tool policy predicts agentic
 behaviour perfectly at both scales ($0/59 \to 59/59$, $p = 3.4\times10^{-13}$
 in each case); model scale predicts it not at all under the default policy
 ($0/59$ vs $0/59$, $p = 1.0$). Resolve rate never reaches significance in any
@@ -358,17 +429,17 @@ onto a tool-policy change is not discovering a better agent, it is discovering
 the switch that makes the agent an agent---and it will be credited with a
 capability gain either way.
 
-\paragraph{The frontier degenerates.}
+\paragraph{Frontier degeneracy.}
 \Sz{} is what defines the measurable frontier. When $\Sz{} = 0$, every condition
 of a frontier-crossing test becomes vacuous: there is no task \Sz{} plausibly
 fails-but-could-solve, the estimator has nothing to estimate, and \emph{any}
 nonzero evolved-scaffold result crosses trivially. This is an
-\emph{uninformative} null---the instrument could not have detected an
-effect---which is categorically weaker than a well-powered null. We flag this
+\emph{uninformative} null: the instrument could not have detected an
+effect, which is categorically weaker than a well-powered null. We flag this
 because a study that reported ``the evolved scaffold beat the baseline'' from
 exactly this configuration would be reporting an artifact.
 
-\paragraph{The interaction term is large enough to explain reported gains.}
+\paragraph{Magnitude of the interaction term.}
 Within our own grid, a two-line harness edit moves measured resolve rate from
 $0/59$ to $4/59$ while the frozen weights are untouched by construction. That
 shift is small in absolute terms and not individually significant, but it is
@@ -379,8 +450,7 @@ tweak specifying which file to edit, or any equivalently trivial harness
 change would be credited with a capability gain under current evaluation
 practice, while the model's reachable set is unchanged by construction.
 
-\paragraph{The comparison is deliberately not compute-matched, and this
-strengthens rather than weakens the point.}
+\paragraph{Compute is reported, not matched.}
 We report compute rather than equalising it, because equalising is not
 meaningful here: an agent that never acts cannot spend a comparable budget.
 The \texttt{auto} arms issue exactly one generation per task (59 total); the
@@ -392,9 +462,8 @@ pass-rate objective assigns them ($p = 0.50$). A selection procedure that
 cannot separate scaffolds differing by $62\times$ in compute and totally in
 behaviour is not measuring what its users believe it measures.
 
-\paragraph{The behavioural effect is overwhelming; the pass-rate effect is not
-statistically resolvable at this scale.}
-We state this asymmetry plainly because it is the crux. The difference in
+\paragraph{Behavioural effect versus pass-rate effect.}
+The difference in
 whether the agent \emph{acts at all} is about as decisive as a $2\times2$ table
 can be: \textbf{59/59 versus 0/59} tasks with at least one tool call, Fisher
 exact $p = 3.4\times10^{-13}$, with non-overlapping Clopper--Pearson intervals
@@ -406,7 +475,7 @@ do \textbf{not} claim that changing the tool policy improves pass rate. It
 changes behaviour categorically and moves resolve rate off the floor by a
 margin this experiment is underpowered to certify.
 
-\paragraph{Nevertheless, moving off zero is algorithmically decisive.}
+\paragraph{Why moving off zero is algorithmically decisive.}
 The gap between $0$ and $1$ resolved tasks is statistically negligible and
 algorithmically total. HGM's node-selection step filters the archive to entries
 with \emph{strictly positive} utility before sampling which to expand. At
@@ -416,17 +485,16 @@ search cannot take its first step. At $1/59$ it can. A quantity that no
 significance test would call a difference is exactly the quantity that
 determines whether the evolutionary loop runs at all.
 
-\paragraph{Pass-rate selection is blind to the scaffold property that matters
-most.}
+\paragraph{A blind spot in pass-rate selection.}
 Combining the behavioural and pass-rate findings: the arms differ by
 $p\approx10^{-13}$ in whether the agent acts, and are indistinguishable in the
 signal used to select between them. A search procedure optimising pass
-rate---as DGM, HGM, and SICA all do---receives almost no gradient from the
+rate, as DGM, HGM, and SICA all do, receives almost no gradient from the
 single change that determines whether its agent is an agent. The scaffold
 change that would break the deadlock is precisely the one its objective cannot
 see.
 
-\paragraph{Self-improvement results are only interpretable within a band.}
+\paragraph{An interpretability band.}
 The base model must be strong enough that the selection signal is
 non-degenerate, but the scaffold must already be functional enough that the
 search is not merely rediscovering its own switches. Neither boundary is
@@ -467,7 +535,7 @@ Whether a self-improving agent's gains reflect an expanded capability boundary
 or better elicitation of an unchanged one is currently unanswerable from
 published evidence, because the necessary controls are absent. We have built
 the instrument those controls require, and in validating it found that the
-scaffold--model interaction term---measurable by changing two lines---is large
+scaffold--model interaction term, measurable by changing two lines, is large
 enough to dominate the quantities the field reports. Before a self-improvement
 result can be interpreted, the frozen model's own ceiling has to be measured.
 

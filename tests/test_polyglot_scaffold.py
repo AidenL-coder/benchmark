@@ -10,7 +10,11 @@ anything Docker/HGM-specific.
 from __future__ import annotations
 
 from cbs.budget import BudgetAccountant, BudgetCaps, Usage
-from cbs.scaffolds.polyglot_scaffold import PolyglotRunResult, S0Polyglot
+from cbs.scaffolds.polyglot_scaffold import (
+    PolyglotRunResult,
+    S0Polyglot,
+    SStarPolyglotBestOfN,
+)
 from cbs.scaffolds.tagging import OperationTrace
 from cbs.tasks.polyglot import PolyglotInstance
 
@@ -150,3 +154,89 @@ class TestS0Polyglot:
 
     def test_config_fingerprint(self):
         assert S0Polyglot().config_fingerprint() == {"name": "S0_polyglot"}
+
+
+class TestSStarPolyglotBestOfN:
+    """Elicitation control (D-47). The critical property under test is that
+    selection is oracle-blind: a passing candidate must NOT be preferred
+    just because it passed."""
+
+    @staticmethod
+    def _runs_agent(sequence):
+        """agent_fn returning a scripted list of (diff, eval_result)."""
+        it = iter(sequence)
+
+        def agent_fn(instance, problem_statement):
+            diff, ev = next(it)
+            return PolyglotRunResult(
+                solution=diff,
+                eval_result=ev,
+                trace=OperationTrace(),
+                usage=Usage(calls=1, prompt_tokens=10, completion_tokens=10),
+            )
+
+        return agent_fn
+
+    def test_selection_is_oracle_blind_majority_wins_over_the_passing_one(self):
+        # Two identical failing diffs outvote a single passing one. An
+        # oracle-peeking scaffold would pick "good"; this must not.
+        agent_fn = self._runs_agent(
+            [("bad", "unresolved"), ("bad", "unresolved"), ("good", "resolved")]
+        )
+        r = SStarPolyglotBestOfN(n_candidates=3).solve(
+            make_instance(), agent_fn, make_accountant()
+        )
+        assert r.solution == "bad"
+        assert r.passed is False, "selection must not prefer a candidate for passing"
+
+    def test_pass_at_n_records_the_upper_bound_separately(self):
+        agent_fn = self._runs_agent(
+            [("bad", "unresolved"), ("bad", "unresolved"), ("good", "resolved")]
+        )
+        r = SStarPolyglotBestOfN(n_candidates=3).solve(
+            make_instance(), agent_fn, make_accountant()
+        )
+        # scaffold failed, but the frozen model did reach a solution in N tries
+        assert r.passed is False
+        assert r.metadata["pass_at_n"] is True
+        assert r.metadata["n_passing_candidates"] == 1
+
+    def test_consensus_picks_the_passing_diff_when_it_is_the_majority(self):
+        agent_fn = self._runs_agent(
+            [("good", "resolved"), ("good", "resolved"), ("bad", "unresolved")]
+        )
+        r = SStarPolyglotBestOfN(n_candidates=3).solve(
+            make_instance(), agent_fn, make_accountant()
+        )
+        assert r.solution == "good"
+        assert r.passed is True
+        assert r.metadata["pass_at_n"] is True
+
+    def test_usage_sums_across_all_candidates(self):
+        agent_fn = self._runs_agent([("a", "unresolved")] * 3)
+        acc = make_accountant()
+        r = SStarPolyglotBestOfN(n_candidates=3).solve(make_instance(), agent_fn, acc)
+        assert r.usage.calls == 3
+        assert r.usage.completion_tokens == 30
+
+    def test_self_consistency_operation_is_traced(self):
+        agent_fn = self._runs_agent([("a", "unresolved")] * 2)
+        r = SStarPolyglotBestOfN(n_candidates=2).solve(
+            make_instance(), agent_fn, make_accountant()
+        )
+        assert r.trace.op_counts().get("self_consistency") == 1
+
+    def test_all_empty_diffs_degrades_without_crashing(self):
+        agent_fn = self._runs_agent([("", "empty_patch")] * 2)
+        r = SStarPolyglotBestOfN(n_candidates=2).solve(
+            make_instance(), agent_fn, make_accountant()
+        )
+        assert r.solution == ""
+        assert r.passed is False
+        assert r.metadata["pass_at_n"] is False
+
+    def test_config_fingerprint_records_n(self):
+        assert SStarPolyglotBestOfN(n_candidates=5).config_fingerprint() == {
+            "name": "S_star_polyglot_bestofn",
+            "n_candidates": 5,
+        }

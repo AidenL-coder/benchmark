@@ -32,17 +32,38 @@ mid-trajectory execution-feedback hook for Polyglot would need the same
 kind of container-splitting surgery D-40 did for SWE-bench Verified's
 harness (a separate agent-only container whose patch can be checked against
 something before the real grading container runs) -- real, unbuilt
-engineering, not a design mistake to route around quietly. Best-of-N
-without execution feedback (`max_candidates` independent trajectories,
-self-consistency over whichever ones the hidden oracle -- queried once per
-candidate at most, or once overall if candidates are pre-filtered some
-other way -- confirms) is a smaller, well-defined next step if a Polyglot
-`S_star` analogue is wanted before that surgery is done; not built here
-either, to avoid a half-finished implementation.
+engineering, not a design mistake to route around quietly.
+
+`SStarPolyglotBestOfN` (D-47) is the part that *can* be built without that
+surgery: N independent trajectories with **oracle-blind** selection by
+self-consistency. It is a genuine elicitation control -- how much of an
+apparent gain is reachable by sampling the same frozen model harder, with no
+evolution -- and it is what supplies the missing rung between `S0` and an
+evolved scaffold.
+
+**The oracle-safety subtlety that shapes its design.** Polyglot's
+`process_entry` runs *and grades* a trajectory in one atomic call, so N
+trajectories yield N grades whether or not we want them. Selecting the
+candidate whose grade is best would be oracle-assisted and is *not* a
+scaffold a real deployment could run. `select_by_consensus` therefore never
+inspects `passed`: it votes on literal diff text alone. The per-candidate
+grades are still recorded, because they license a second, clearly-separated
+quantity:
+
+*   ``resolved`` -- the oracle-blind scaffold's own result: did the
+    self-consistency-selected candidate pass? This is the elicitation
+    control proper, comparable to `S0`.
+*   ``pass_at_n`` -- did *any* of the N trajectories pass? This is an
+    upper bound on what *any* selection rule over the same N samples could
+    achieve, i.e. a budget-relative estimate of the frozen model's reachable
+    set. It must never be reported as scaffold performance; it is the
+    ceiling that a perfect selector would hit, and the gap between it and
+    ``resolved`` is exactly the headroom a better selection rule could win.
 """
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -55,6 +76,7 @@ __all__ = [
     "PolyglotResult",
     "PolyglotAgentFunction",
     "S0Polyglot",
+    "SStarPolyglotBestOfN",
 ]
 
 
@@ -147,4 +169,117 @@ class S0Polyglot:
             budget_exhausted=budget_exhausted,
             error=run.error or None,
             metadata={"seed": seed},
+        )
+
+
+class SStarPolyglotBestOfN:
+    """Elicitation control for Polyglot: N trajectories, oracle-blind
+    selection by self-consistency (D-47).
+
+    This is the rung between `S0Polyglot` and any evolved scaffold. It asks
+    the question an evolved-scaffold result must be compared against: how
+    much is reachable by sampling the *same frozen model* harder, with no
+    evolution and no privileged information?
+
+    **Selection never inspects the grade.** `_select_by_consensus` votes on
+    literal diff text only. This is load-bearing rather than stylistic:
+    Polyglot's harness grades every trajectory as a side effect of running
+    it, so picking the best-scoring candidate would be trivial *and* would
+    not correspond to any scaffold a real deployment could run. See the
+    module docstring.
+
+    **Two distinct numbers come out, and conflating them would be a serious
+    error.** `passed` is what this oracle-blind scaffold actually achieved.
+    `metadata["pass_at_n"]` is whether *any* of the N trajectories passed --
+    an upper bound on what any selection rule over the same samples could
+    reach, and a budget-relative estimate of the frozen model's reachable
+    set. Only the former is scaffold performance.
+
+    Like `s_star.py`'s own `_select_by_consensus`, matching is on literal
+    text, so two different-but-equivalent diffs never cluster. That is a
+    weaker approximation than canonicalised comparison, not a silent one.
+    """
+
+    name = "S_star_polyglot_bestofn"
+
+    def __init__(self, n_candidates: int = 3):
+        self.n_candidates = n_candidates
+
+    def config_fingerprint(self) -> dict:
+        return {"name": self.name, "n_candidates": self.n_candidates}
+
+    @staticmethod
+    def _select_by_consensus(diffs: list[str]) -> str:
+        """Majority vote by literal diff text; earliest member of the
+        winning cluster breaks ties. Deliberately blind to pass/fail."""
+        real = [d for d in diffs if d]
+        if not real:
+            return ""
+        counts = Counter(real)
+        winning = max(counts, key=lambda d: counts[d])
+        for d in real:
+            if d == winning:
+                return d
+        return real[0]  # unreachable
+
+    def solve(
+        self,
+        instance: PolyglotInstance,
+        agent_fn: PolyglotAgentFunction,
+        accountant: BudgetAccountant,
+        *,
+        seed: int | None = None,
+    ) -> PolyglotResult:
+        trace = OperationTrace()
+        runs: list[PolyglotRunResult] = []
+        total_usage = Usage()
+        budget_exhausted = False
+
+        for i in range(self.n_candidates):
+            run = agent_fn(instance, instance.problem_statement)
+            runs.append(run)
+            total_usage = total_usage + run.usage
+            for r in run.trace.records:
+                trace.record_instant(r.name, r.duration_s, **r.metadata)
+            try:
+                accountant.charge(run.usage)
+            except BudgetExceeded:
+                budget_exhausted = True
+                break
+
+        if not runs:
+            return PolyglotResult(
+                instance_id=instance.instance_id,
+                solution="",
+                trace=trace,
+                usage=total_usage,
+                budget_exhausted=budget_exhausted,
+                error="no trajectory ran",
+                metadata={"seed": seed, "n_candidates": 0, "pass_at_n": False},
+            )
+
+        with trace.record("self_consistency", n_candidates=len(runs)):
+            chosen = self._select_by_consensus([r.solution for r in runs])
+
+        # The grade belonging to the candidate consensus actually picked.
+        # Falls back to the first run only when no candidate produced a diff.
+        selected = next((r for r in runs if r.solution and r.solution == chosen), runs[0])
+
+        return PolyglotResult(
+            instance_id=instance.instance_id,
+            solution=chosen,
+            trace=trace,
+            usage=total_usage,
+            eval_result=selected.eval_result,
+            passed=selected.passed,
+            budget_exhausted=budget_exhausted,
+            error=None,
+            metadata={
+                "seed": seed,
+                "n_candidates": len(runs),
+                # Upper bound over the same samples -- NOT scaffold performance.
+                "pass_at_n": any(r.passed for r in runs),
+                "n_passing_candidates": sum(1 for r in runs if r.passed),
+                "per_candidate_eval": [r.eval_result for r in runs],
+            },
         )

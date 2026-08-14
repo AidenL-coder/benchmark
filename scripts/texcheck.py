@@ -36,6 +36,13 @@ used = set(re.findall(r"\\([a-zA-Z]+)", no_comments))
 print(f"custom macros used but undefined: "
       f"{sorted(m for m in (defined & used)) and 'n/a (all defined ones are used)'}")
 
+# Cross-references: every \ref must have a \label
+labels = set(re.findall(r"\\label\{([^}]+)\}", no_comments))
+refs = set(re.findall(r"\\(?:page|auto)?ref\{([^}]+)\}", no_comments))
+print(f"\nlabels defined: {sorted(labels)}")
+print(f"DANGLING refs (no matching label): {sorted(refs - labels) or 'none'}")
+print(f"labels never referenced: {sorted(labels - refs) or 'none'}")
+
 # Citations vs bib keys
 cites = set()
 for grp in re.findall(r"\\cite[a-z]*\{([^}]*)\}", no_comments):

@@ -131,11 +131,42 @@ def load_arm(path: Path) -> dict:
     lo_r, hi_r = (ci_r.low, ci_r.high) if ci_r else (0.0, 0.0)
     lo_t, hi_t = (ci_t.low, ci_t.high) if ci_t else (0.0, 0.0)
 
+    # Best-of-N arms (D-47) carry a second quantity that must never be
+    # conflated with `resolved`. `resolved` is what the oracle-BLIND
+    # scaffold achieved and is the elicitation control proper; `pass_at_n`
+    # is whether ANY of the N trajectories passed, i.e. an upper bound on
+    # what any selection rule over the same samples could reach. Reporting
+    # pass_at_n as scaffold performance would silently claim headroom the
+    # scaffold did not capture, so the two are kept in separate keys and
+    # the gap between them is surfaced explicitly.
+    best_of_n = {}
+    if any("pass_at_n" in r for r in valid):
+        pass_at_n = sum(1 for r in valid if r.get("pass_at_n"))
+        ci_p = clopper_pearson(pass_at_n, n) if n else None
+        n_cfgs = {r.get("n_candidates_cfg") for r in valid if r.get("n_candidates_cfg")}
+        best_of_n = {
+            "is_best_of_n": True,
+            "n_candidates_cfg": sorted(n_cfgs) if len(n_cfgs) != 1 else next(iter(n_cfgs)),
+            "pass_at_n": pass_at_n,
+            "pass_at_n_ci": (ci_p.low, ci_p.high) if ci_p else (0.0, 0.0),
+            # What a perfect (oracle-assisted, non-deployable) selector would
+            # have won over this scaffold's actual blind selection.
+            "selection_headroom": pass_at_n - resolved,
+        }
+
+    # A best-of-N arm shares its (model, agent_src) pair with the S0 arm it
+    # controls for, so ARM_LABELS alone would render them identically and
+    # invite exactly the comparison error this script exists to prevent.
+    label = ARM_LABELS.get((model, agent), f"{model} x {agent}")
+    if best_of_n:
+        label = f"{label} bo{best_of_n['n_candidates_cfg']}"
+
     return {
+        **best_of_n,
         "path": path.name,
         "model": model,
         "agent": agent,
-        "label": ARM_LABELS.get((model, agent), f"{model} x {agent}"),
+        "label": label,
         "n": n,
         "infra_excluded": infra,
         "wrong_artifact": wrong_artifact,
@@ -210,6 +241,38 @@ def main() -> None:
     print("  NB: raw patch length is not reported -- it is dominated by build")
     print("      artifacts once the agent actually builds the project. See")
     print("      BUILD_ARTIFACT_PREFIXES in this file for the measured example.")
+
+    # Elicitation control (D-47). Printed in its own block, never merged into
+    # the resolved column above, because the two numbers answer different
+    # questions and only one of them is scaffold performance.
+    bon = [a for a in arms if a.get("is_best_of_n")]
+    if bon:
+        print()
+        print("Best-of-N elicitation control (D-47)")
+        print("-" * 96)
+        for a in bon:
+            lo_p, hi_p = a["pass_at_n_ci"]
+            lo_r, hi_r = a["resolved_ci"]
+            n_cfg = a["n_candidates_cfg"]
+            print(
+                f"  {a['label']:<18} N={n_cfg} | "
+                f"oracle-blind selected {a['resolved']:>3}/{a['n']:<3} "
+                f"[{lo_r:.3f}, {hi_r:.3f}]  <- the control proper"
+            )
+            print(
+                f"  {'':<18}     | "
+                f"pass@N (upper bound)  {a['pass_at_n']:>3}/{a['n']:<3} "
+                f"[{lo_p:.3f}, {hi_p:.3f}]  <- NOT scaffold performance"
+            )
+            print(
+                f"  {'':<18}     | selection headroom a perfect (oracle-assisted, "
+                f"non-deployable) selector would win: {a['selection_headroom']}"
+            )
+        print()
+        print("  NB: pass@N is an upper bound over the SAME samples, i.e. a")
+        print("      budget-relative estimate of the frozen model's reachable set.")
+        print("      Quoting it as the scaffold's result would claim headroom the")
+        print("      scaffold's own blind selection did not capture.")
 
     # Per-language breakdown, useful for showing the effect is not driven by
     # one language's harness quirk.

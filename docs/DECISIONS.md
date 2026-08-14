@@ -2860,6 +2860,191 @@ correctly first), but corrected so a glance at a run log is not misleading.
 
 ---
 
+## D-47 — a best-of-N elicitation control for Polyglot, with oracle-blind
+selection and a separately-reported upper bound · **C**
+
+**The gap this closes.** `S0Polyglot` (D-42) is one trajectory; an evolved
+scaffold runs many, under a changed harness. Comparing the two directly
+confounds *evolution* with *more sampling of the same frozen model* — the
+exact elicitation-vs-expansion conflation this project exists to measure.
+`cbs.compare` already supplies this control for the `Task`-shaped families;
+Polyglot had no equivalent rung. `SStarPolyglotBestOfN` is that rung: N
+independent trajectories against the unmodified frozen model, no evolution.
+
+**The design constraint that shapes it.** Polyglot's `process_entry` runs
+*and grades* a trajectory in one atomic call (D-42) — so N trajectories
+produce N grades whether or not the scaffold wants them. Selecting the
+best-graded candidate would be trivial to implement and would also be
+**oracle-assisted**: no deployable scaffold gets to see hidden-test outcomes
+before choosing what to submit. `_select_by_consensus` therefore votes on
+literal diff text alone and never inspects `passed`. This is the same
+oracle-blindness discipline `S_star`'s selection follows (D-14), applied
+where the oracle is unusually easy to peek at.
+
+**Two quantities, which must not be conflated.** The per-candidate grades
+are still recorded, because they license a second and genuinely useful
+number:
+
+* `resolved` — did the *self-consistency-selected* candidate pass. This is
+  the elicitation control proper, directly comparable to `S0`.
+* `pass_at_n` — did *any* of the N trajectories pass. An upper bound on what
+  any selection rule over the same samples could achieve, i.e. a
+  budget-relative estimate of the frozen model's reachable set. **Not
+  scaffold performance.** The gap between the two is exactly the headroom a
+  better selection rule could win, and reporting it separately keeps that
+  headroom visible instead of silently claiming it.
+
+**What is tested, and what the load-bearing test is.** `tests/
+test_polyglot_scaffold.py` covers usage summation, trace tagging, empty-diff
+degradation, and fingerprinting. The one that matters is
+`test_selection_is_oracle_blind_majority_wins_over_the_passing_one`: two
+identical *failing* diffs outvote a single *passing* one, and the scaffold
+must return the failing majority. An oracle-peeking implementation passes
+every other test in the file and fails only this one.
+
+**Known weakness, stated rather than hidden.** Like `s_star.py`'s own
+`_select_by_consensus`, clustering is on literal text, so two
+different-but-equivalent diffs never cluster. On diffs this is a weaker
+approximation than it is on canonicalised source (`cbs.tasks.canonicalize`
+has no diff-level analogue), and it will systematically under-cluster.
+That biases the control *downward* — against the elicitation explanation
+and toward whatever an evolved scaffold later shows — so it must not be
+used to argue that evolution beat sampling.
+
+**Status**: built and unit-tested against synthetic agent functions. **Not
+yet run against real infrastructure** — queued for the 2026-08-13 GPU
+provisioning. Pre-registration §4.1's arms are unaffected: this is an
+additional control arm, not a change to a declared prediction.
+
+---
+
+## D-48 — first real execution of HGM's self-improvement path: four
+infrastructure bugs, none of which a code review had found · **P**
+
+**Status: in progress, 2026-08-13.** Recorded now, before results, because
+the bugs are findings in their own right and each was caught by *running*
+the path rather than reading it. `sample_child` — the function that
+actually proposes a scaffold child — had never executed once in this
+project's history (D-37 through D-42 all exercised evaluation, never
+self-improvement), so this was the first contact with it.
+
+**1. The self-improve container had no host networking.**
+`utils/docker_utils.py:build_hgm_container` calls `client.containers.run(...)`
+with no `network_mode`, so the container the self-improvement agent runs in
+cannot reach the host's vLLM server at all — the exact D-37 failure. D-37
+patched two container call sites (HGM's own agent container, and the
+vendored SWE-bench harness's); this third one was missed *because
+`sample_child` had never run*, so nothing ever exercised it. Patched
+identically; `.orig_cbs` backup kept.
+
+**2. D-43 recurred, in a path the existing fix does not cover.**
+Both smoke tasks failed with `Error building image ...: [('polyglot/
+polyglot-benchmark/go/.../.git/objects/12/e5be...')]` — `shutil.copytree`
+cannot overwrite git's read-only (mode 444) objects left in a stale build
+staging directory. `scripts/polyglot_glue.py` has carried
+`_clear_stale_build_context` since D-43, but **the evolutionary loop never
+calls `polyglot_glue`** — it drives HGM's harness directly. The fix was
+therefore ported into `polyglot/docker_build.py` itself, immediately before
+the `copytree`, where every build path gets it. Trigger here was `cp -a
+hgm hgm_B` carrying 43 stale staging directories into the new working copy.
+Reported by the harness as `incomplete`, i.e. indistinguishable from a model
+failure without inspecting logs — the precise hazard D-43 exists to name.
+
+**3. An error handler that destroyed its own diagnostic.**
+`hgm_utils.sample_child` caught the exception from `choose_entry`, logged
+it, and then fell through to `safe_log(f"Task to improve: {entry}")` with
+`entry` never assigned. The resulting `UnboundLocalError` was raised and
+re-raised, **replacing the real `IndexError` in the logs**. The first smoke
+run reported only the `UnboundLocalError`. Rewritten to fail with the actual
+cause and return `"failed"` (already how `sample_child` signals failure
+elsewhere); an empty candidate set is a legitimate state, not a crash.
+
+**4. Cross-run state contamination via `cp -r` into an existing directory.**
+With the handler fixed, the real error was visible: `IndexError` from
+`random.choice(entry_ids)` on an empty list, despite the seed evaluation
+having correctly graded both tasks as `unresolved`. Cause: `initialize_run`
+does `os.system(f"cp -r {initial_folder}/{agent} {output_dir}/initial")`.
+When `{output_dir}/initial` **already exists** — i.e. on any second run
+sharing an output directory — `cp -r` copies the seed *inside* it
+(`initial/<agent>/`) rather than replacing it, leaving the previous run's
+`metadata.json` in place. `choose_entry` then read a *stale, failed* run's
+empty result lists. This silently makes any repeated run inherit its
+predecessor's seed performance, which for an evolutionary search is a
+serious contamination path, not a cosmetic bug. Worked around by giving
+every run its own `--output_dir`; deliberately **not** patched upstream,
+since the fresh-directory discipline is the right habit regardless and
+mutating `initialize_run` risks changing archive semantics.
+
+**5. The diagnosis step does not fit in a 16k context, by one token.**
+With `choose_entry` working, `sample_child` reached `diagnose_problem` and
+every attempt returned HTTP 400: *"maximum context length is 16384 tokens.
+However, you requested 4096 output tokens and your prompt contains at least
+12289 input tokens, for a total of at least 16385."* One token over. The
+diagnosis prompt embeds the failing task's trajectory, so it is far larger
+than a task prompt, and `--max-model-len 16384` (used for every run in this
+project so far, D-39's `max_tokens` cap included) cannot hold it. HGM's
+handler also references an unassigned `response` in its own except branch,
+producing a second masking error (`local variable 'response' referenced
+before assignment`) on top of the real 400 — the same anti-pattern as bug 3.
+Net effect: `problem_statement: None`, and `sample_child` returns
+`"failed"` without ever proposing a child.
+
+**Fixed by raising the deployment to `--max-model-len 32768`** (native for
+Qwen2.5-Coder) rather than truncating the fork's prompt, which would have
+silently changed what the diagnosis step sees. **This is a real
+methodological difference and is recorded as one**: the 2×2 arms in §4.1
+were all served at 16384, so the evolutionary run does *not* share a
+deployment configuration with them. It remains internally valid, because
+`initialize_run` re-evaluates the seed under the same 32768 deployment as
+its children, so the within-run seed-vs-child comparison the preregistration
+specifies is unconfounded. The external `4/59` figure from the `14B ×
+required` arm is therefore a **reference point, not the baseline**, and must
+not be quoted as the seed's score for this run.
+
+**6. The diagnosis prompt is unbounded, and upstream's own truncation is
+commented out.** Raising the context to 32768 was necessary but not
+sufficient. Reading `prompts/self_improvement_prompt.py` showed why: the
+prompt concatenates `code_text` (~28k chars), `md_log` — the *entire* chat
+history of the failing trajectory, ~100k chars — plus eval log, both
+patches, and the issue text. Roughly 130k characters, which no context we
+can serve for a 14B model on a single 24GB A10 will hold. The authors
+evidently met this too, since their own clip is present but **commented
+out**:
+
+```python
+# if len(code_text) > 100000:
+#     code_text = code_text[:100000] + "\n<code clipped>"
+```
+
+and even enabled it would have bounded only the smallest of the three large
+terms, at a limit larger than our whole window. This is a real property of
+the published system, not a local misconfiguration: **HGM's
+self-improvement step assumes a very large-context (hosted) model and is not
+runnable as-published against a self-hosted one.** The smoke task, on a
+*two-task* subset, already produced a 12289-token prompt; a real task with
+~97 tool calls produces far more.
+
+Patched with explicit character budgets (`_CBS_CODE_BUDGET` 24000,
+`_CBS_MDLOG_BUDGET` 32000, `_CBS_EVALLOG_BUDGET` 8000), clipping the
+*middle* of each section rather than the tail — for a trajectory, the head
+says what the agent set out to do and the tail says how it failed, so
+one-ended clipping discards half the diagnostic signal. **This is a genuine
+reduction in what the diagnosis model sees relative to the authors' intent,
+and must be stated as a limitation** rather than presented as an equivalent
+reproduction: a diagnosis step given less evidence may propose worse
+children, so a weak evolutionary result under this configuration is only
+weak evidence about the method itself.
+
+**What this says about the D-44 blocker.** Nothing yet — none of the above
+is a result. But it bears on interpretation: four of the five are failures
+the harness reports in the *same channel* as ordinary model failure, which
+is the same class of hazard as D-43 and D-46. A study that ran this loop
+without reading logs would have recorded every one of them as the agent
+performing badly, and bugs 3 and 5 would additionally have reported the
+*wrong exception* while doing so.
+
+---
+
 ## Still open
 
 | # | Decision | Status | Needed by |

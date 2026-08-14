@@ -157,6 +157,32 @@ second stop after this file.
 > nothing gradeable. That last one required a denominator correction made
 > **against our own interest**: counting them as unresolved gives 4/59 = 6.8%
 > rather than the flattering 4/50 = 8.0%.
+>
+> **Update 2026-08-13 — the self-improvement path has now actually run, and
+> the six bugs found getting there are in D-48.** Two A10 instances
+> (`146.235.205.15`, `192.9.153.166`) share one persistent filesystem, so
+> instance B works from its own `hgm_B` copy to avoid staging/output
+> collisions. Running: **best-of-N elicitation control** on A
+> (`SStarPolyglotBestOfN`, 14B × `required`, N=3, ~14h, oracle-blind
+> selection with `pass_at_n` reported separately — D-47), and the **first
+> real evolutionary run** on B (`evo1`, 59 tasks, `max_task_evals=25`,
+> 3 workers). A 2-task smoke test first confirmed `sample_child` produces,
+> archives, and evaluates real children end to end — **and validated D-41's
+> `expand()` fix against a live all-zero-utility archive**, which until then
+> had only been checked against an isolated reproduction.
+>
+> **Three things a later session must not miss.** (1) `hgm_B`'s vLLM runs at
+> `--max-model-len 32768`, *not* the 16384 every §4.1 arm used, because
+> HGM's diagnosis prompt does not fit otherwise; the `4/59` figure from the
+> `14B × required` arm is therefore a **reference point, not this run's
+> baseline** (the run re-evaluates its own seed). (2) The diagnosis prompt is
+> truncated by a `cbs` patch to `prompts/self_improvement_prompt.py`, since
+> upstream's own clip is commented out and the prompt is otherwise ~130k
+> chars — so this is **not a faithful reproduction of HGM as published**, and
+> a weak result is weak evidence about the *method*. (3) `polyglot/subsets/
+> {small,medium}.json` were temporarily replaced with 2-task smoke subsets;
+> the real ones are restored, with backups at `*.json.real`. Verify
+> `len(set(small+medium)) == 59` before trusting any run.
 
 **D-23 is resolved as of this session — read this before assuming infra is
 still the blocker.** A real Docker+GPU host now exists and has been proven
