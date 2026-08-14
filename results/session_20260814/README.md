@@ -49,6 +49,25 @@ tagging path is the one the paper would rely on. **Do not use
 `trace_op_counts` from this run until this is diagnosed.** The raw events are
 preserved here precisely so it can be re-derived.
 
+## `auto_arm_transcripts.tgz` — raw evidence for the D-49 finding
+
+All 118 chat-history transcripts from the two `auto` arms (59 each, 7B and
+14B), copied out of the task containers. These are the primary evidence for
+the paper's central measurement: 47/59 emitted tool calls and 30/59 runnable
+for the 14B, against 0/59 structured. `scripts/extract_prose_calls.py`
+regenerates the counts from these files, so the claim is re-derivable from
+raw data rather than resting on a summary statistic.
+
+## `hgm_fork_patches.diff` — every modification to the forked system
+
+Unified diffs against the pre-modification backups for the five patched
+files: host networking for the self-improve container (D-37/D-48),
+build-staging clearing (D-43), the `choose_entry` error handler that
+destroyed its own diagnostic, the diagnosis prompt budgets (D-48), and the
+two-line `tool_choice` change defining the `required` arms. The paper's
+reproducibility statement promises these are diffable against upstream; this
+is that artifact.
+
 ## What was lost
 
 - Instance A: any tasks completing after 03:55 UTC, when its mount hung.

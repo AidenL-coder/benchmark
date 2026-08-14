@@ -1,0 +1,149 @@
+===== utils/docker_utils.py =====
+--- utils/docker_utils.py.orig_cbs	2026-08-13 18:44:46.233461195 +0000
++++ utils/docker_utils.py	2026-08-13 18:44:46.287217329 +0000
+@@ -285,8 +285,14 @@
+ 
+     try:
+         # Run the container
++        # cbs D-37 fix: the self-improve container must reach the host's
++        # vLLM server at localhost:8001. Docker's default bridge network
++        # cannot, so every model call fails with a connection error. Same
++        # fix already applied to the agent and SWE-bench harness containers;
++        # this call site was missed because sample_child had never run.
+         container = client.containers.run(
+-            image=image_name, name=container_name, detach=True
++            image=image_name, name=container_name, detach=True,
++            network_mode="host"
+         )
+         safe_log(f"Container '{container_name}' started successfully.")
+         return container
+===== hgm_utils.py =====
+--- hgm_utils.py.orig_cbs	2026-08-13 19:45:51.332533337 +0000
++++ hgm_utils.py	2026-08-13 19:45:51.422218657 +0000
+@@ -360,15 +360,23 @@
+         log_container_output(exec_result)
+ 
+         safe_log("Getting tasks to improve")
++        # cbs fix: upstream swallowed this exception and then referenced the
++        # still-unbound `entry` in the next block, so the UnboundLocalError
++        # that followed replaced the real cause in the logs. Fail here with
++        # the actual reason instead. An empty candidate set is a legitimate
++        # state (nothing left to improve on), not a crash.
+         try:
+             entry = choose_entry(parent_commit)
+         except Exception as e:
+-            safe_log(f"Error choosing entry: {e}")
+-        try:
+-            safe_log(f"Task to improve: {entry}")
+-        except Exception as e:
+-            choose_entry(parent_commit, debug=True)
+-            raise e
++            safe_log(f"Error choosing entry ({type(e).__name__}): {e}")
++            try:
++                choose_entry(parent_commit, debug=True)
++            except Exception as dbg:
++                safe_log(f"choose_entry debug pass also failed: {dbg}")
++            cleanup_container(container)
++            save_metadata(metadata, run_output_dir)
++            return "failed"
++        safe_log(f"Task to improve: {entry}")
+         problem_statement = diagnose_problem(
+             entry,
+             parent_commit,
+===== polyglot/docker_build.py =====
+--- polyglot/docker_build.py.orig_cbs	2026-08-13 19:44:33.059052999 +0000
++++ polyglot/docker_build.py	2026-08-13 19:44:33.382538863 +0000
+@@ -103,6 +103,20 @@
+             local_folder = Path(repo)  # your source folder
+             if local_folder.is_dir():
+                 target_folder = build_dir / repo
++                # cbs D-43 fix: copytree(dirs_exist_ok=True) fails on any
++                # leftover staging from an earlier run, because git writes
++                # .git/objects/* read-only (mode 444) and copytree cannot
++                # overwrite them. The harness reports the resulting
++                # exception identically to a genuine model failure, so this
++                # silently corrupts a run's denominator rather than failing
++                # loudly. Staging is regenerable build context, never
++                # source, so clearing it is safe.
++                if target_folder.exists():
++                    def _force_writable(func, path, exc_info):
++                        import os, stat
++                        os.chmod(path, stat.S_IWRITE | stat.S_IREAD)
++                        func(path)
++                    shutil.rmtree(target_folder, onerror=_force_writable)
+                 shutil.copytree(local_folder, target_folder, dirs_exist_ok=True)
+                 logger.info(f"Copied folder {local_folder} to {target_folder}")
+ 
+===== prompts/self_improvement_prompt.py =====
+--- prompts/self_improvement_prompt.py.orig_cbs	2026-08-13 20:09:23.360475265 +0000
++++ prompts/self_improvement_prompt.py	2026-08-13 20:09:23.449294168 +0000
+@@ -437,8 +437,14 @@
+         exclude_files=exclude_files,
+         is_polyglot=is_polyglot,
+     )
++    # cbs D-48: upstream's clip (below, commented out) was both disabled and
++    # far too large for a self-hosted context. Applied here with a real
++    # budget, alongside the md_log/eval_log clips that upstream lacks.
+     # if len(code_text) > 100000:
+     #     code_text = code_text[:100000] + "\n<code clipped>"
++    code_text = _cbs_clip_middle(code_text, _CBS_CODE_BUDGET, "code")
++    md_log = _cbs_clip_middle(md_log, _CBS_MDLOG_BUDGET, "trajectory")
++    eval_log = _cbs_clip_middle(eval_log, _CBS_EVALLOG_BUDGET, "eval log")
+     safe_log(
+         f"Code text length: {len(code_text)}, md_log length: {len(md_log)}, eval_log length: {len(eval_log)}, predicted_patch length: {len(predicted_patch)}, answer_patch length: {len(answer_patch)}, test_patch length: {len(test_patch)}, github_issue length: {len(github_issue)}, "
+     )
+@@ -466,6 +472,33 @@
+     )
+ 
+ 
++# --- cbs D-48: explicit prompt budgets -------------------------------------
++# See module history: upstream's own code_text clip is commented out below
++# and md_log is unbounded, which cannot fit a self-hosted 32k context.
++_CBS_CODE_BUDGET = 24000
++_CBS_MDLOG_BUDGET = 32000
++_CBS_EVALLOG_BUDGET = 8000
++
++
++def _cbs_clip_middle(text, limit, label):
++    """Clip to `limit` chars, keeping head and tail and marking the cut.
++
++    Head and tail are both kept on purpose: the start of a trajectory says
++    what the agent set out to do, the end says how it failed. Keeping only
++    one end discards half the diagnostic signal.
++    """
++    if text is None or len(text) <= limit:
++        return text
++    head = limit // 2
++    tail = limit - head
++    return (
++        text[:head]
++        + f"\n\n<{label} clipped: {len(text) - limit} of {len(text)} chars "
++        f"omitted to fit the served context window>\n\n"
++        + text[-tail:]
++    )
++
++
+ def get_eval_log_text(eval_json, test_status=None):
+     if not test_status:
+         first_key = next(iter(eval_json))
+=== llm_withtools ===
+--- llm_withtools.py.auto_orig	2026-08-13 18:43:15.187813929 +0000
++++ llm_withtools.py	2026-08-13 18:43:15.209643367 +0000
+@@ -233,7 +233,7 @@
+                 client=client,
+                 model=client_model,
+                 messages=msg_history + new_msg_history,
+-                tool_choice="auto",
++                tool_choice="required",
+                 tools=tools,
+                 logging=logging,
+             )
+@@ -298,7 +298,7 @@
+                 client=client,
+                 model=client_model,
+                 messages=msg_history + new_msg_history,
+-                tool_choice="auto",
++                tool_choice="required",
+                 tools=tools,
+                 logging=logging,
+             )

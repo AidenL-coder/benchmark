@@ -124,12 +124,30 @@ proxy.stop()
 summary = summarize(events)
 summary["hgm_exit_code"] = rc
 summary["elapsed_hours"] = round(elapsed / 3600, 3)
-try:
-    summary["trace_op_counts"] = reconstruct_trace_from_events(
-        [e for e in events if e.status == 200]
-    ).op_counts()
-except Exception as exc:
-    summary["trace_op_counts_error"] = f"{type(exc).__name__}: {exc}"
+
+# `reconstruct_trace_from_events` is DELIBERATELY NOT CALLED HERE.
+#
+# It reconstructs one conversation by tracking message-history growth
+# (`prev_len`), and its docstring states the precondition: events must be in
+# call order *for a single-threaded agent conversation*. This driver runs
+# HGM with `max_workers > 1`, so several agents' conversations interleave
+# through one proxy. A long conversation advances `prev_len` past a short
+# one's entire history, and the short one's tool messages are then never
+# scanned -- silently, with no error.
+#
+# An earlier version did call it, and reported `tool_call: 28` for a run in
+# which 12,645 responses carried tool calls. The discrepancy is what exposed
+# the misuse. Per-task runs (`polyglot_glue.py`) are unaffected: they build a
+# proxy per task and reset between tasks, so each event set really is one
+# conversation, and their trace counts are sound.
+#
+# The raw events are written below, so a correct per-conversation
+# reconstruction can be derived later without re-running anything.
+summary["trace_op_counts"] = None
+summary["trace_op_counts_note"] = (
+    "omitted: reconstruct_trace_from_events requires a single-threaded "
+    "conversation and this run used concurrent workers"
+)
 
 SUMMARY_OUT.write_text(json.dumps(summary, indent=2))
 EVENTS_OUT.write_text(

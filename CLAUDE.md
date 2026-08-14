@@ -193,6 +193,32 @@ second stop after this file.
 > trajectories for the headline result, not only when something errors** —
 > the `auto` arms never errored, so nobody opened them for four months.
 >
+> **Session end state, 2026-08-14 ~06:00 UTC — both runs PAUSED, not
+> finished; instances may be terminated.** Everything is pulled into
+> `results/session_20260814/` (see its `README.md` for provenance and
+> caveats): the **complete** 59-task evo1 seed evaluation (4/59 resolved:
+> `go__counter`, `java__mazy-mice`, `java__react`, `rust__gigasecond`), the
+> **partial** best-of-N arm (42/59, 2 resolved, 3 pass@3 — the gap is real
+> selection headroom), all 118 raw `auto`-arm transcripts, the 4.8 MB
+> interception event log, and `hgm_fork_patches.diff` with every modification
+> made to the fork. **No evolutionary result exists**: evo1 was halted during
+> its first `sample_child`, `output_evo1/hgm_metadata.jsonl` was never
+> written, and no child was archived. The paper says so explicitly in
+> §"Executing the self-improvement path" — do not let a later edit imply
+> otherwise.
+>
+> **Two open defects to fix before any further GPU spend.** (1) The proxy
+> summary reports `calls_with_tool_calls: 12645` while
+> `reconstruct_trace_from_events` reports `tool_call: 28` for the same run.
+> One of those two code paths is wrong and the tagging path is the one the
+> paper depends on — **do not use `trace_op_counts` until this is
+> diagnosed**; raw events are preserved so it can be re-derived without
+> re-running. (2) `.dockerignore` in `hgm_B` excludes `output_hgm/` but not
+> `output_smoke*/` or `output_evo*/`, so previous runs' output directories
+> were swept into the seed agent's source snapshot — harmless for evaluation,
+> but the self-improvement step reads its own source, so a future run should
+> exclude them first.
+>
 > **Three things a later session must not miss.** (1) `hgm_B`'s vLLM runs at
 > `--max-model-len 32768`, *not* the 16384 every §4.1 arm used, because
 > HGM's diagnosis prompt does not fit otherwise; the `4/59` figure from the

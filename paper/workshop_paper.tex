@@ -147,16 +147,39 @@ things that are not:
   serialisation format away from acting.
 \end{enumerate}
 
-Section~\ref{sec:instrument} describes the instrument that makes such
-attribution measurable, designed to attach to an existing,
-independently-implemented loop rather than to a system co-designed with its
-own evaluation. Section~\ref{sec:repro} reports separately on executing the
-\emph{proposal} half of the same system, where six defects had to be repaired
-before a scaffold variant could be generated at all, and where four of the six
-were reported through the same channel as ordinary model failure. That
-observation is a smaller contribution than the measurement result, but it
-bears on the same question: whether the quantities these systems record can
-be taken at face value.
+\paragraph{Two contributions, and their present status.}
+This paper contributes an \emph{instrument} and a \emph{result obtained
+while validating it}, and we state the relationship between them plainly
+because it determines what may be concluded from either.
+
+The instrument (\S\ref{sec:instrument}) is a measurement layer for
+attributing a self-improving system's gains between elicitation and
+capability expansion. It comprises a scaffold ladder with a matched-compute
+elicitation control, operation tagging enforced by network-layer
+interception rather than agent self-report, causal ablation that withholds
+an information channel rather than requesting its disuse, and frontier
+estimation with non-parametric coverage bounds. It is designed to attach to
+an existing, independently-implemented loop rather than to a system
+co-designed with its own evaluation.
+
+\textbf{It is not yet fully validated, and we do not claim it is.} The
+interception layer is exercised here at scale ($1.28\times10^4$ intercepted
+calls) and is what produced the result below. The elicitation control is
+implemented and partially run; causal ablation and frontier estimation are
+implemented and unit-tested but have not been run against a real evolved
+scaffold, because---as \S\ref{sec:results} shows---no evolved scaffold could
+be produced in this configuration. A component that has not met real data is
+reported as such throughout.
+
+The result (\S\ref{sec:results}) is what the interception layer found when
+pointed at the baseline: a recorded zero that conceals two unrelated
+failures, one of them a serialisation error that halts the search
+mechanically. We regard the result as the more secure of the two
+contributions, since it rests on measurements rather than on a design.
+\S\ref{sec:repro} reports separately on executing the \emph{proposal} half
+of the same system, where six defects had to be repaired before a scaffold
+variant could be generated at all, and four of the six were reported through
+the same channel as ordinary model failure.
 
 \section{Related work}
 
@@ -367,11 +390,24 @@ HGM's diagnosis prompt does not fit a 16k window. Those runs therefore do
 Table~\ref{tab:main}, and we do not compare their numbers directly; each
 re-evaluates its own seed. We state this rather than quietly pool the two.
 
-We manipulate one variable: the agent's tool policy. The
-\texttt{required} variant differs from HGM's unmodified default agent in
-\textbf{exactly two lines}, both the \texttt{tool\_choice} flag; we verify this
-by direct diff rather than assertion. All other scaffold code, the model, the
-task set, and the grading harness are identical.
+We manipulate one variable: the agent's \emph{tool policy}, set by the
+\texttt{tool\_choice} parameter of the OpenAI-compatible chat API. The
+parameter takes three named values: \texttt{"none"}, under which the model
+may not call a tool; \texttt{"auto"}, under which the model decides for
+itself whether to call one; and \texttt{"required"}, under which it must
+emit at least one call, enforced by constraining decoding to the tool-call
+grammar. HGM's released agent uses \texttt{"auto"}. We write these values
+literally rather than paraphrasing them, because the distinction between
+``the model chose not to call a tool'' and ``the model could not emit a
+call in the required form'' is what Section~\ref{sec:results} turns on, and
+a gloss such as \emph{optional} would blur it.
+
+Throughout, we label the two conditions the \textbf{\texttt{auto} arm} and
+the \textbf{\texttt{required} arm}. The \texttt{required} variant differs
+from HGM's unmodified default agent in \textbf{exactly two lines}, both the
+\texttt{tool\_choice} flag; we verify this by direct diff rather than
+assertion. All other scaffold code, the model, the task set, and the grading
+harness are identical.
 
 \subsection{Results}
 
@@ -633,19 +669,50 @@ tried and been wrong.
 
 \subsection{Implications}
 
+\paragraph{The recorded quantity is not the phenomenon.}
+The central consequence is not that a flag changes behaviour---that is
+definitional---but that a single recorded value, $0$ tool calls, covers two
+unrelated states of the system. In one, the model does not act. In the other
+it selects the correct tool and arguments and fails to serialise them. Every
+quantity HGM logs is identical across the two: resolve count, tool-call
+count, patch length, and the per-task distributions of each. The distinction
+is recoverable only from trajectories, which no selection procedure in this
+family reads.
+
+This is what the tool-policy manipulation is for, and it is worth being
+precise about its role. It is not the finding; it is the control that
+establishes the finding's direction. Because constraining decoding to the
+tool-call grammar converts the same model, on the same tasks, from $0$ to
+$59/59$ tasks using tools, the deficit under the default policy cannot be
+attributed to an inability to determine \emph{what} to do. The 14B
+transcripts show the intended call already formed
+(Table~\ref{tab:prose}); the constrained-decoding arm shows the same intent
+surviving into the structured field. What separates them is a wire format.
+
+\paragraph{Why this is not merely a scoring inaccuracy.}
+An evaluation error that lowered all scores uniformly would be a nuisance.
+This one is structural, because self-improving systems consume their own
+scores. HGM samples archive nodes of \emph{strictly positive} utility before
+expanding one. A protocol failure sends every node to zero, the candidate
+set is empty for every node, and the search cannot take its first step---the
+implementation raises \texttt{ValueError: attempt to get argmax of an empty
+sequence}. The formatting failure does not degrade the search; it prevents
+it from starting. We observed exactly this, and it is why the evolutionary
+run reported in \S\ref{sec:repro} required a seed configuration that scores
+above zero at all.
+
 \paragraph{Scaffold policy versus model scale.}
 The claim here is regime-relative: what follows holds for the
 two model scales, one task family, and one forked system tested here, and we
 do not claim scaffold dominates model capability in general. Within that
-scope the $2\times2$ separates cleanly. Tool policy predicts agentic
-behaviour perfectly at both scales ($0/59 \to 59/59$, $p = 3.4\times10^{-13}$
-in each case); model scale predicts it not at all under the default policy
-($0/59$ vs $0/59$, $p = 1.0$). Resolve rate never reaches significance in any
-comparison ($0$, $2$, $0$, $4$ of 59; smallest $p = 0.12$). For meta-agent
-evaluation this reverses the usual attribution: a harness search that stumbles
-onto a tool-policy change is not discovering a better agent, it is discovering
-the switch that makes the agent an agent---and it will be credited with a
-capability gain either way.
+scope, model scale predicts recorded agentic behaviour not at all under the
+default policy ($0/59$ vs $0/59$, $p = 1.0$), while predicting
+\emph{attempted} behaviour strongly ($47/59$ vs $5/59$). Resolve rate never
+reaches significance in any comparison ($0$, $2$, $0$, $4$ of 59; smallest
+$p = 0.12$). For meta-agent evaluation this reverses the usual attribution:
+a harness search that stumbles onto a tool-policy change is not discovering
+a better agent, it is discovering the switch that makes the agent's actions
+legible---and it will be credited with a capability gain either way.
 
 \paragraph{Frontier degeneracy.}
 \Sz{} is what defines the measurable frontier. When $\Sz{} = 0$, every condition
@@ -657,16 +724,17 @@ effect, which is categorically weaker than a well-powered null. We flag this
 because a study that reported ``the evolved scaffold beat the baseline'' from
 exactly this configuration would be reporting an artifact.
 
-\paragraph{Magnitude of the interaction term.}
-Within our own grid, a two-line harness edit moves measured resolve rate from
-$0/59$ to $4/59$ while the frozen weights are untouched by construction. That
-shift is small in absolute terms and not individually significant, but it is
-the entire distance between ``this system solves nothing'' and ``this system
-solves tasks''---and it is precisely the kind of change a scaffold search is
-built to find. A search that discovers a tool-policy adjustment, a prompt
-tweak specifying which file to edit, or any equivalently trivial harness
-change would be credited with a capability gain under current evaluation
-practice, while the model's reachable set is unchanged by construction.
+\paragraph{What a scaffold search would be rewarded for.}
+The interventions that move this system's measured score are not ones that
+change what the frozen model can do. Repairing serialisation moves it from
+$0/59$ to $4/59$ with the weights untouched by construction; so, plausibly,
+would a prompt line specifying which file to edit, given that 9/59 of the
+tool-using runs failed by writing an undeclared file
+(\S\ref{sec:results}). Both are interface repairs. Both would be credited as
+capability gains under current evaluation practice, because pass rate is
+the only thing being read. The concern is not that a search might find such
+a change---finding it is useful---but that nothing in the reported
+methodology distinguishes having found it from having improved the agent.
 
 \paragraph{Compute is reported, not matched.}
 We report compute rather than equalising it, because equalising is not
@@ -692,16 +760,6 @@ resolve-rate shift smaller than roughly $6/59$ at $\alpha = 0.05$. We therefore
 do \textbf{not} claim that changing the tool policy improves pass rate. It
 changes behaviour categorically and moves resolve rate off the floor by a
 margin this experiment is underpowered to certify.
-
-\paragraph{Why moving off zero is algorithmically decisive.}
-The gap between $0$ and $1$ resolved tasks is statistically negligible and
-algorithmically total. HGM's node-selection step filters the archive to entries
-with \emph{strictly positive} utility before sampling which to expand. At
-$0/59$ that candidate set is empty for every node, and the implementation
-raises \texttt{ValueError: attempt to get argmax of an empty sequence}---the
-search cannot take its first step. At $1/59$ it can. A quantity that no
-significance test would call a difference is exactly the quantity that
-determines whether the evolutionary loop runs at all.
 
 \paragraph{A blind spot in pass-rate selection.}
 Combining the behavioural and pass-rate findings: the arms differ by
@@ -736,6 +794,17 @@ exercised outside its authors' own hosted configuration, and six defects had to
 be repaired before a single child could be proposed. We report them because the
 distribution of \emph{how they surface} is itself a finding, not because any
 individual defect is interesting.
+
+\textbf{We report no evolutionary result, and state the scope precisely so
+that none is inferred.} After the repairs below, a two-task configuration
+ran the loop end to end: two children were proposed, archived, and
+evaluated, which establishes that the path executes. A full 59-task run then
+completed its seed evaluation---the seed scores $4/59$, matching the
+\texttt{14B} $\times$ \texttt{required} arm's rate on three of the same four
+tasks---but was halted during its first \texttt{sample\_child} call before
+any child was archived. What follows is therefore an account of making the
+proposal half runnable, not a measurement of what it proposes. The
+attribution study the instrument was built for remains unrun.
 
 \begin{table}[t]
 \caption{Defects encountered before the self-improvement path would execute.
